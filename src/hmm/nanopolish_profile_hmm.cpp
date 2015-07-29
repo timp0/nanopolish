@@ -8,6 +8,7 @@
 #include <algorithm>
 #include "nanopolish_profile_hmm.h"
 
+//#define DEBUG_BACKTRACK 1
 //#define DEBUG_FILL
 //#define PRINT_TRAINING_MESSAGES 1
 
@@ -27,29 +28,6 @@ void profile_hmm_forward_initialize(FloatMatrix& fm)
     set(fm, 0, PS_KMER_SKIP, -INFINITY);
     set(fm, 0, PS_EVENT_SPLIT, -INFINITY);
     set(fm, 0, PS_MATCH, 0.0f);
-}
-
-// Terminate the forward algorithm by calculating
-// the probability of transitioning to the end state
-// for all columns and a given row
-float profile_hmm_forward_terminate(const FloatMatrix& fm,
-                                    const FloatMatrix& tm,
-                                    uint32_t row)
-{
-    assert(false);
-    return -INFINITY;
-
-    /*
-    float sum = -INFINITY;
-    uint32_t tcol = fm.n_cols - 1;
-    for(uint32_t sk = 0; sk < fm.n_cols - 1; sk++) {
-        // transition probability from state k to state l
-        float t_kl = get(tm, sk, tcol);
-        float fm_k = get(fm, row, sk);
-        sum = add_logs(sum, t_kl + fm_k);
-    }
-    return sum;
-    */
 }
 
 // convenience function to run the HMM over multiple inputs and sum the result
@@ -131,9 +109,9 @@ std::vector<AlignmentState> profile_hmm_align(const std::string& sequence, const
 
     // Traverse the backtrack matrix to compute the results
     
-    // start from the last event matched to the last kmer
-    uint32_t row = n_rows - 1;
-    uint32_t col = PS_NUM_STATES * n_kmers + PS_MATCH;
+    // get the last match from the output structure
+    uint32_t row, col;
+    output.get_end_cell(row, col);
 
     while(row > 0) {
         
@@ -160,7 +138,7 @@ std::vector<AlignmentState> profile_hmm_align(const std::string& sequence, const
         ProfileState next_ps = (ProfileState)get(bm, row, col);
 
 #if DEBUG_BACKTRACK
-        printf("Backtrack [%zu %zu] k: %zu block: %zu curr_ps: %c next_ps: %c\n", row, col, kmer_idx, block, ps2char(curr_ps), ps2char(next_ps));
+        printf("Backtrack [%zu %zu] k: %zu block: %zu curr_ps: %c next_ps: %c lp: %.2lf\n", row, col, kmer_idx, block, ps2char(curr_ps), ps2char(next_ps), as.l_fm);
 #endif
 
         if(curr_ps == PS_MATCH) {
@@ -175,6 +153,9 @@ std::vector<AlignmentState> profile_hmm_align(const std::string& sequence, const
             kmer_idx -= 1;
         }
 
+        if(next_ps == PS_PRE_SOFT) {
+            break;
+        }
         col = PS_NUM_STATES * (kmer_idx + 1) + next_ps;
     }
 

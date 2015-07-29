@@ -93,6 +93,61 @@ TEST_CASE( "hmm", "[hmm]") {
     input[1].rc = true;
     input[1].strand = 1;
 
+    // Local alignment test
+    std::string ref_local = ref_subseq.substr(0, 17);
+
+    HMMInputData local_input[2] = { input[0], input[1] };
+    local_input[1].event_start_idx = 6788;
+    local_input[1].event_stop_idx = 6770;
+
+    printf("seq: %s\n", ref_subseq.c_str());
+    printf("seq: %s %.2lf\n", ref_local.c_str(), profile_hmm_score(ref_local, local_input[1]));
+
+    float max0 = -INFINITY;
+    float max1 = -INFINITY;
+    std::string ref_extend = ref_local + "AAAA";
+    for(size_t n = 0; n < 256; n++) {
+
+        std::vector<AlignmentState> a0 = profile_hmm_align(ref_extend, local_input[0]);
+        std::vector<AlignmentState> a1 = profile_hmm_align(ref_extend, local_input[1]);
+
+        double score0 = profile_hmm_score(ref_extend, local_input[0]);
+        double score1 = profile_hmm_score(ref_extend, local_input[1]);
+
+        if(score0 > max0) {
+            max0 = score0;
+        }
+        if(score1 > max1) {
+            max1 = score1;
+        }
+
+        char match = ref_subseq.find(ref_extend) != std::string::npos ? '*' : ' ';
+
+        printf("seq: %s %.2lf %.2lf [%d %d] [%d %d] [%.2lf %.2lf] %c\n", 
+                ref_extend.c_str(), score0, score1, 
+                a1.front().event_idx, a1.front().kmer_idx,
+                a1.back().event_idx, a1.back().kmer_idx,
+                max0, max1, match);
+        lexicographic_next(ref_extend);
+    }
+
+    {
+        std::string debug_string = ref_local + "GAGC";
+        std::vector<AlignmentState> local_alignment = profile_hmm_align(ref_local + "GAGC", local_input[1]);
+
+        for(size_t i = 0; i < local_alignment.size(); ++i) {
+            double lp_e = log_probability_match(sr, 
+                                                kmer_rank(debug_string.c_str() + local_alignment[i].kmer_idx, K), 
+                                                local_alignment[i].event_idx,
+                                                1);
+
+            printf("\t[%d %d]: %.2lf\n", local_alignment[i].event_idx, local_alignment[i].kmer_idx, lp_e);
+        }
+        std::string ea_str = event_alignment_to_string(local_alignment);
+        printf("Local alignment string: %s\n", ea_str.c_str());
+    }
+
+
     // expected output
     std::string expected_alignment[2];
     expected_alignment[0] = 

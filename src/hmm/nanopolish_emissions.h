@@ -78,6 +78,14 @@ inline float log_probability_event_insert(const SquiggleRead& read,
     return log_probability_match(read, kmer_rank, event_idx, strand, scale, log_scale);
 }
 
+inline float log_probability_background(const SquiggleRead& read,
+                                        uint32_t event_idx,
+                                        uint8_t strand)
+{
+    return -3.0f;
+}
+
+
 inline float log_probability_kmer_insert(const SquiggleRead& read,
                                          uint32_t kmer_rank,
                                          uint32_t event_idx,

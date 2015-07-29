@@ -70,11 +70,12 @@ enum ProfileState
     PS_KMER_SKIP = 0,
     PS_EVENT_SPLIT,
     PS_MATCH,
-    PS_NUM_STATES = 3
+    PS_NUM_STATES = 3,
+    PS_PRE_SOFT // intentionally after PS_NUM_STATES
 };
 
 // Convert an enumerated state into a symbol
-inline char ps2char(ProfileState ps) { return "KEMN"[ps]; }
+inline char ps2char(ProfileState ps) { return "KEMNS"[ps]; }
 
 // Pre-computed transitions from the previous block
 // into the current block of states. Log-scaled.
