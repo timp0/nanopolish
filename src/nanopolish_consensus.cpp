@@ -229,6 +229,76 @@ std::vector<Variant> generate_all_snps(const std::string& reference)
     return out;
 }
 
+std::vector<Variant> generate_variants_from_kLCS(const std::string& reference, const std::string& sequence, const int kmer)
+{
+    std::vector<Variant> out;
+    kLCSResult result = kLCS(reference, sequence, kmer);
+
+    uint32_t match_idx = 0;
+    uint32_t last_idx = result.size() - 1;
+    while(match_idx < result.size()) {
+
+        // advance the match to the next point of divergence
+        while(match_idx != last_idx && 
+              result[match_idx].i == result[match_idx + 1].i - 1 &&
+              result[match_idx].j == result[match_idx + 1].j - 1) {
+            match_idx++;
+        }
+
+        // no more divergences to process
+        if(match_idx == last_idx)
+            break;
+
+        uint32_t bl = result[match_idx + 1].i - result[match_idx].i + kmer;
+        uint32_t rl = result[match_idx + 1].j - result[match_idx].j + kmer;
+
+        std::string ref_subseq = reference.substr(result[match_idx].i, bl);
+        std::string read_subseq = sequence.substr(result[match_idx].j, rl);
+        
+        // substrings must share a k-mer at the beginning/end
+        assert(ref_subseq.substr(0, kmer) == read_subseq.substr(0, kmer));    
+        assert(ref_subseq.substr(bl - kmer) == read_subseq.substr(rl - kmer));    
+        assert(ref_subseq != read_subseq);
+
+        // Find the left boundary of the difference
+        int ref_s = 0;
+        int read_s = 0;
+        while(ref_subseq[ref_s] == read_subseq[read_s]) {
+            ref_s += 1;
+            read_s += 1;
+        }
+
+        // if its an indel or complex variant, include one matching base
+        if(ref_subseq.length() != read_subseq.length() || ref_s != read_s) {
+            ref_s -= 1;
+            read_s -= 1;
+        }
+        
+        std::string tmp_ref = ref_subseq.substr(ref_s);
+        std::string tmp_read = read_subseq.substr(read_s);
+
+        // trim unnecessary bases from the end
+        while(tmp_ref.size() > 1 && tmp_read.size() > 1 && 
+              tmp_ref.back() == tmp_read.back()) 
+        {
+            tmp_ref.pop_back();
+            tmp_read.pop_back();
+            assert(!tmp_ref.empty());
+            assert(!tmp_read.empty());
+        }
+
+        Variant v;
+        v.ref_name = "noctg";
+        v.ref_position = ref_s + result[match_idx].i;
+        v.ref_seq = tmp_ref;
+        v.alt_seq = tmp_read;
+        out.push_back(v);
+
+        match_idx += 1;
+    }
+    return out;
+}
+
 std::vector<Variant> generate_variants_from_reads(const std::string& reference, const std::vector<std::string>& reads)
 {
     std::vector<Variant> out;
@@ -239,81 +309,8 @@ std::vector<Variant> generate_variants_from_reads(const std::string& reference, 
         if(reads[ri].size() < K)
             continue;
 
-        kLCSResult result = kLCS(reference, reads[ri], K);
-
-#ifdef DEBUG_ALT_GENERATION
-        printf("Match to alt %s\n", alt.c_str());
-        for(size_t mi = 0; mi < result.size(); ++mi) {
-            std::string extend = "";
-            if(mi < result.size() - 1 && result[mi].j + 1 != result[mi + 1].j) {
-                extend = alt.substr(result[mi].j, result[mi + 1].j - result[mi].j + K);
-            }
-            printf("\t%zu %zu %s %s\n", result[mi].i, result[mi].j, base.substr(result[mi].i, K).c_str(), extend.c_str());
-        }
-#endif
-
-        uint32_t match_idx = 0;
-        uint32_t last_idx = result.size() - 1;
-        while(match_idx < result.size()) {
-
-            // advance the match to the next point of divergence
-            while(match_idx != last_idx && 
-                  result[match_idx].i == result[match_idx + 1].i - 1 &&
-                  result[match_idx].j == result[match_idx + 1].j - 1) {
-                match_idx++;
-            }
-
-            // no more divergences to process
-            if(match_idx == last_idx)
-                break;
-
-            uint32_t bl = result[match_idx + 1].i - result[match_idx].i + K;
-            uint32_t rl = result[match_idx + 1].j - result[match_idx].j + K;
-
-            std::string ref_subseq = reference.substr(result[match_idx].i, bl);
-            std::string read_subseq = reads[ri].substr(result[match_idx].j, rl);
-            
-            // substrings must share a k-mer at the beginning/end
-            assert(ref_subseq.substr(0, K) == read_subseq.substr(0, K));    
-            assert(ref_subseq.substr(bl - K) == read_subseq.substr(rl - K));    
-            assert(ref_subseq != read_subseq);
-
-            // Find the left boundary of the difference
-            int ref_s = 0;
-            int read_s = 0;
-            while(ref_subseq[ref_s] == read_subseq[read_s]) {
-                ref_s += 1;
-                read_s += 1;
-            }
-
-            // if its an indel or complex variant, include one matching base
-            if(ref_subseq.length() != read_subseq.length() || ref_s != read_s) {
-                ref_s -= 1;
-                read_s -= 1;
-            }
-            
-            std::string tmp_ref = ref_subseq.substr(ref_s);
-            std::string tmp_read = read_subseq.substr(read_s);
-
-            // trim unnecessary bases from the end
-            while(tmp_ref.size() > 1 && tmp_read.size() > 1 && 
-                  tmp_ref.back() == tmp_read.back()) 
-            {
-                tmp_ref.pop_back();
-                tmp_read.pop_back();
-                assert(!tmp_ref.empty());
-                assert(!tmp_read.empty());
-            }
-
-            Variant v;
-            v.ref_name = "noctg";
-            v.ref_position = ref_s + result[match_idx].i;
-            v.ref_seq = tmp_ref;
-            v.alt_seq = tmp_read;
-            out.push_back(v);
-
-            match_idx += 1;
-        }
+        std::vector<Variant> read_variants = generate_variants_from_kLCS(reference, reads[ri], K);
+        out.insert(out.end(), read_variants.begin(), read_variants.end());
     }
     return out;
 }
@@ -329,46 +326,60 @@ struct BranchSequence
 // Branch and bound algorithm for calling variants
 Haplotype call_variants_for_region_bb(const std::string& contig, int region_start, int region_end)
 {
-    const int BUFFER = 20;
-    int STRIDE = 100;
+    const int BUFFER = 10;
 
     if(region_start < BUFFER)
-        region_start = BUFFER + 20;
+        region_start = BUFFER;
+
+    size_t buffered_region_start = region_start - BUFFER;
+    size_t buffered_region_end = region_end + BUFFER;
 
     // load the region, accounting for the buffering
     AlignmentDB alignments(opt::reads_file, opt::genome_file, opt::bam_file, opt::event_bam_file);
-    alignments.load_region(contig, region_start - BUFFER, region_end + BUFFER);
+    alignments.load_region(contig, buffered_region_start, buffered_region_end);
     Haplotype derived_haplotype(contig,
                                 alignments.get_region_start(),
                                 alignments.get_reference());
 
-    for(int subregion_start = region_start;
-            subregion_start < region_end; 
-            subregion_start += STRIDE)
-    {
-        int subregion_end = subregion_start + STRIDE;
+    // What base are we currently calling from
+    size_t curr_ref_start = buffered_region_start;
+    
+    // Get the reference string over the whole region
+    std::string ref_string = alignments.get_reference_substring(contig, buffered_region_start, buffered_region_end);
 
-        int buffer_start = subregion_start - BUFFER;
-        int buffer_end = subregion_end + BUFFER;
-        buffer_end = std::min(region_end, buffer_end);
+    // initialize the sequence to be the buffered piece
+    std::string consensus = ref_string.substr(0, BUFFER);
+    
+    // Extend the consensus holding the invariant that the last N bp exactly match the reference sequence
+    while(curr_ref_start < region_end) {
 
-        // extract data from alignment database
-        std::string ref_string = alignments.get_reference_substring(contig, buffer_start, buffer_end);
-        std::vector<std::string> read_strings = alignments.get_read_substrings(contig, buffer_start, buffer_end);
-        std::vector<HMMInputData> event_sequences = alignments.get_event_subsequences(contig, buffer_start, buffer_end);
+        // Call variants over a subregion of size 60
+        size_t curr_ref_end = curr_ref_start + 60;
+        curr_ref_end = std::min(curr_ref_end, buffered_region_end);
+
+        // Get the event sequences within this window
+        std::string ref_subseq = alignments.get_reference_substring(contig, curr_ref_start, curr_ref_end);
+        std::vector<HMMInputData> event_sequences = alignments.get_event_subsequences(contig, curr_ref_start, curr_ref_end);
+
+        BranchSequence root = { consensus.substr(consensus.size() - BUFFER), -INFINITY };
+
+        // Check the invariant holds
+        printf("calling region start: %zu brs: %zu root: %s ref: %s\n", 
+            curr_ref_start, 
+            buffered_region_start,
+            root.sequence.c_str(), 
+            ref_string.substr(curr_ref_start - buffered_region_start, BUFFER).c_str());
+        printf("root: %s\n", root.sequence.c_str());
+
+        assert(root.sequence == ref_string.substr(curr_ref_start - buffered_region_start, BUFFER));
         
-        if(opt::verbose > 1) {
-            fprintf(stderr, "Calling:\n");
-            fprintf(stderr, "%s:%d-%d using buffer range [%d %d]\n", contig.c_str(), subregion_start, subregion_end, buffer_start, buffer_end);
-            fprintf(stderr, "%s\n", ref_string.c_str());
-        }
-
-        BranchSequence root = { ref_string.substr(0, 40), -INFINITY };
         std::vector<BranchSequence> branches(1, root);
 
         size_t MAX_EXTEND = 20;
         size_t i = 0;
 
+        size_t match_pos = std::string::npos;
+        std::string new_consensus = "";
         while(i < MAX_EXTEND) {
             
             printf("\n==== Round %zu ====\n", i);
@@ -379,8 +390,12 @@ Haplotype call_variants_for_region_bb(const std::string& contig, int region_star
                     std::string extended = branches[branch_idx].sequence + "ACGT"[base_idx];
 
                     double score = 0.0f;
+                    
+                    #pragma omp parallel for
                     for(size_t j = 0; j < event_sequences.size(); ++j) {
-                        score += profile_hmm_score(extended, event_sequences[j]);
+                        double s = profile_hmm_score(extended, event_sequences[j]);
+                        #pragma omp critical
+                        score += s;
                     }
 
                     BranchSequence new_branch = { extended, score };
@@ -390,16 +405,16 @@ Haplotype call_variants_for_region_bb(const std::string& contig, int region_star
             
             // sort by score
             std::sort(incoming.begin(), incoming.end(), BranchSequence::sortByScore);
-
             branches.clear();
-
+            
+            // cull bad branches
             for(size_t branch_idx = 0; branch_idx < incoming.size(); ++branch_idx) {
                 BranchSequence& branch = incoming[branch_idx];
                 double relative_score = branch.score - incoming[0].score;
                 bool is_ref = ref_string.find(branch.sequence) != std::string::npos;
                 bool selected = false;
 
-                if( (relative_score > -100.0f && branch_idx < 16) || is_ref) {
+                if( (relative_score > -200.0f && branch_idx < 16) || branch_idx < 4 || is_ref) {
                     selected = true;
                     branches.push_back(branch);
                 }
@@ -408,13 +423,60 @@ Haplotype call_variants_for_region_bb(const std::string& contig, int region_star
                 std::string status = is_ref ? "*" : " ";
                 status += selected ? 's' : ' ';
                 printf("seq: %s %.2lf %s\n", branch.sequence.c_str(), relative_score, status.c_str());
-
             }
 
+            // check if we've found the reference sequence on the best branch
+            assert(!branches.empty());
+
+            const BranchSequence& best_branch = branches.front();
+            std::string branch_suffix = best_branch.sequence.substr(best_branch.sequence.size()- BUFFER);
+            match_pos = ref_subseq.rfind(branch_suffix);
+            if(match_pos != std::string::npos) {
+                new_consensus = best_branch.sequence;
+                break;
+            }
             i += 1;
         }
+        
+        if(new_consensus.empty()) {
+            
+            // we didn't assemble a new consensus sequence
+            // add in the next MAX_EXTEND of reference sequence
+            std::string ref_extension = ref_string.substr(curr_ref_start - buffered_region_start, MAX_EXTEND);
 
-        break;
+            // set curr_ref_start to the first base of the BUFFER flanking sequence
+            // this is where calling will start from next round
+            curr_ref_start += MAX_EXTEND - BUFFER;
+            consensus.append(ref_extension);
+
+        } else {
+
+            // parse variants from the consensus
+            std::vector<Variant> variants = generate_variants_from_kLCS(ref_subseq, new_consensus, BUFFER);
+            
+            // translate variants into reference coordinates
+            for(size_t vi = 0; vi < variants.size(); ++vi) {
+                variants[vi].ref_name = contig;
+                variants[vi].ref_position += curr_ref_start;
+                variants[vi].write_vcf(stdout);
+            }
+
+            // Score variants here
+            Haplotype subregion_haplotype = derived_haplotype.substr_by_reference(curr_ref_start, curr_ref_end);
+            std::vector<Variant> selected_variants = select_variants(variants, subregion_haplotype, event_sequences);
+            for(size_t i = 0; i < selected_variants.size(); ++i) {
+                derived_haplotype.apply_variant(selected_variants[i]);
+                if(opt::verbose > 0) {
+                    selected_variants[i].write_vcf(stdout);
+                }
+            }
+            
+            printf("new consensus: %s\n", new_consensus.c_str());
+            printf("match pos: %zu\n", match_pos);
+            // update consensus sequence
+            consensus.append(new_consensus.substr(BUFFER));
+            curr_ref_start += match_pos;
+        }
     }
     return derived_haplotype;
 }
