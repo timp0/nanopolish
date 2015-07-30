@@ -128,6 +128,13 @@ double score_sequence(const std::string& sequence, const HMMInputData& data)
     //return score_emission_dp(sequence, state);
 }
 
+int get_contig_length(const std::string& contig)
+{
+    faidx_t *fai = fai_load(opt::genome_file.c_str());
+    int len = faidx_seq_len(fai, contig.c_str());
+    fai_destroy(fai);
+    return len;
+}
 
 std::vector<AlignmentState> hmm_align(const std::string& sequence, const HMMInputData& data)
 {
@@ -330,7 +337,8 @@ Haplotype call_variants_for_region_bb(const std::string& contig, int region_star
 
     if(region_start < BUFFER)
         region_start = BUFFER;
-
+    region_end = std::min(region_end, get_contig_length(contig) - BUFFER);
+    
     size_t buffered_region_start = region_start - BUFFER;
     size_t buffered_region_end = region_end + BUFFER;
 
@@ -343,7 +351,7 @@ Haplotype call_variants_for_region_bb(const std::string& contig, int region_star
 
     // What base are we currently calling from
     size_t curr_ref_start = buffered_region_start;
-    
+
     // Get the reference string over the whole region
     std::string ref_string = alignments.get_reference_substring(contig, buffered_region_start, buffered_region_end);
 
@@ -623,13 +631,6 @@ void parse_consensus_options(int argc, char** argv)
     }
 }
 
-int get_contig_length(const std::string& contig)
-{
-    faidx_t *fai = fai_load(opt::genome_file.c_str());
-    int len = faidx_seq_len(fai, contig.c_str());
-    fai_destroy(fai);
-    return len;
-}
 
 int consensus_main(int argc, char** argv)
 {
