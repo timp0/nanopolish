@@ -171,7 +171,6 @@ std::vector<Variant> select_variants(const std::vector<Variant>& candidate_varia
                 }
             }
             
-            printf("TEST: %.2lf\n", variant_lp - base_lp);
             v.write_vcf(stdout);
             if(variant_lp > best_variant_lp) {
                 best_variant_lp = variant_lp;

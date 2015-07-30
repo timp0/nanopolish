@@ -318,6 +318,108 @@ std::vector<Variant> generate_variants_from_reads(const std::string& reference, 
     return out;
 }
 
+struct BranchSequence
+{
+    std::string sequence;
+    double score;
+
+    static bool sortByScore(const BranchSequence& a, const BranchSequence& b) { return a.score > b.score; }
+};
+
+// Branch and bound algorithm for calling variants
+Haplotype call_variants_for_region_bb(const std::string& contig, int region_start, int region_end)
+{
+    const int BUFFER = 20;
+    int STRIDE = 100;
+
+    if(region_start < BUFFER)
+        region_start = BUFFER + 20;
+
+    // load the region, accounting for the buffering
+    AlignmentDB alignments(opt::reads_file, opt::genome_file, opt::bam_file, opt::event_bam_file);
+    alignments.load_region(contig, region_start - BUFFER, region_end + BUFFER);
+    Haplotype derived_haplotype(contig,
+                                alignments.get_region_start(),
+                                alignments.get_reference());
+
+    for(int subregion_start = region_start;
+            subregion_start < region_end; 
+            subregion_start += STRIDE)
+    {
+        int subregion_end = subregion_start + STRIDE;
+
+        int buffer_start = subregion_start - BUFFER;
+        int buffer_end = subregion_end + BUFFER;
+        buffer_end = std::min(region_end, buffer_end);
+
+        // extract data from alignment database
+        std::string ref_string = alignments.get_reference_substring(contig, buffer_start, buffer_end);
+        std::vector<std::string> read_strings = alignments.get_read_substrings(contig, buffer_start, buffer_end);
+        std::vector<HMMInputData> event_sequences = alignments.get_event_subsequences(contig, buffer_start, buffer_end);
+        
+        if(opt::verbose > 1) {
+            fprintf(stderr, "Calling:\n");
+            fprintf(stderr, "%s:%d-%d using buffer range [%d %d]\n", contig.c_str(), subregion_start, subregion_end, buffer_start, buffer_end);
+            fprintf(stderr, "%s\n", ref_string.c_str());
+        }
+
+        BranchSequence root = { ref_string.substr(0, 40), -INFINITY };
+        std::vector<BranchSequence> branches(1, root);
+
+        size_t MAX_EXTEND = 20;
+        size_t i = 0;
+
+        while(i < MAX_EXTEND) {
+            
+            printf("\n==== Round %zu ====\n", i);
+
+            std::vector<BranchSequence> incoming;
+            for(size_t branch_idx = 0; branch_idx < branches.size(); ++branch_idx) {
+                for(size_t base_idx = 0; base_idx < 4; ++base_idx) {
+                    std::string extended = branches[branch_idx].sequence + "ACGT"[base_idx];
+
+                    double score = 0.0f;
+                    for(size_t j = 0; j < event_sequences.size(); ++j) {
+                        score += profile_hmm_score(extended, event_sequences[j]);
+                    }
+
+                    BranchSequence new_branch = { extended, score };
+                    incoming.push_back(new_branch);
+                }
+            }
+            
+            // sort by score
+            std::sort(incoming.begin(), incoming.end(), BranchSequence::sortByScore);
+
+            branches.clear();
+
+            for(size_t branch_idx = 0; branch_idx < incoming.size(); ++branch_idx) {
+                BranchSequence& branch = incoming[branch_idx];
+                double relative_score = branch.score - incoming[0].score;
+                bool is_ref = ref_string.find(branch.sequence) != std::string::npos;
+                bool selected = false;
+
+                if( (relative_score > -100.0f && branch_idx < 16) || is_ref) {
+                    selected = true;
+                    branches.push_back(branch);
+                }
+                
+                // Debug print
+                std::string status = is_ref ? "*" : " ";
+                status += selected ? 's' : ' ';
+                printf("seq: %s %.2lf %s\n", branch.sequence.c_str(), relative_score, status.c_str());
+
+            }
+
+            i += 1;
+        }
+
+        break;
+    }
+    return derived_haplotype;
+}
+
+
 Haplotype call_variants_for_region(const std::string& contig, int region_start, int region_end)
 {
     const int BUFFER = 20;
@@ -503,7 +605,7 @@ int consensus_main(int argc, char** argv)
     for(; start_base < end_base; start_base += WINDOW_LENGTH) {
     
         int window_end = std::min(start_base + WINDOW_LENGTH, end_base);
-        Haplotype haplotype = call_variants_for_region(contig, start_base, window_end);
+        Haplotype haplotype = call_variants_for_region_bb(contig, start_base, window_end);
 
         fprintf(out_fp, ">%s:%d-%d\n%s\n", contig.c_str(), start_base, window_end, haplotype.get_sequence().c_str());
 
