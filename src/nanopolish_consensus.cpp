@@ -347,9 +347,6 @@ Haplotype call_variants_for_region_bb(const std::string& contig, int region_star
     // Get the reference string over the whole region
     std::string ref_string = alignments.get_reference_substring(contig, buffered_region_start, buffered_region_end);
 
-    // initialize the sequence to be the buffered piece
-    std::string consensus = ref_string.substr(0, BUFFER);
-    
     // Extend the consensus holding the invariant that the last N bp exactly match the reference sequence
     while(curr_ref_start < region_end) {
 
@@ -361,7 +358,9 @@ Haplotype call_variants_for_region_bb(const std::string& contig, int region_star
         std::string ref_subseq = alignments.get_reference_substring(contig, curr_ref_start, curr_ref_end);
         std::vector<HMMInputData> event_sequences = alignments.get_event_subsequences(contig, curr_ref_start, curr_ref_end);
 
-        BranchSequence root = { consensus.substr(consensus.size() - BUFFER), -INFINITY };
+        // Start the extension from the last BUFFER bases of the called sequence
+        BranchSequence root = { ref_string.substr(curr_ref_start - buffered_region_start, BUFFER),
+                                -INFINITY };
 
         // Check the invariant holds
         printf("calling region start: %zu brs: %zu root: %s ref: %s\n", 
@@ -378,7 +377,7 @@ Haplotype call_variants_for_region_bb(const std::string& contig, int region_star
         size_t MAX_EXTEND = 20;
         size_t i = 0;
 
-        size_t match_pos = std::string::npos;
+        std::vector<std::string> candidate_sequences;
         std::string new_consensus = "";
         while(i < MAX_EXTEND) {
             
@@ -416,66 +415,72 @@ Haplotype call_variants_for_region_bb(const std::string& contig, int region_star
 
                 if( (relative_score > -200.0f && branch_idx < 16) || branch_idx < 4 || is_ref) {
                     selected = true;
-                    branches.push_back(branch);
                 }
-                
+             
+                bool joined = false;
+                // Check if this branch has rejoined the reference
+                if(selected) {
+                    if(is_ref) {
+                        // never check the reference for joining
+                        branches.push_back(branch);
+                    } else {
+                        std::string branch_suffix = branch.sequence.substr(branch.sequence.size()- BUFFER);
+                        if(ref_subseq.rfind(branch_suffix) != std::string::npos) {
+                            // branch has joined reference
+                            joined = true;
+                            candidate_sequences.push_back(branch.sequence);
+                        } else {
+                            // continue extending
+                            branches.push_back(branch);
+                        }
+                    }
+                }
+
                 // Debug print
                 std::string status = is_ref ? "*" : " ";
                 status += selected ? 's' : ' ';
+                status += joined ? 'j' : ' ';
                 printf("seq: %s %.2lf %s\n", branch.sequence.c_str(), relative_score, status.c_str());
             }
 
-            // check if we've found the reference sequence on the best branch
-            assert(!branches.empty());
-
-            const BranchSequence& best_branch = branches.front();
-            std::string branch_suffix = best_branch.sequence.substr(best_branch.sequence.size()- BUFFER);
-            match_pos = ref_subseq.rfind(branch_suffix);
-            if(match_pos != std::string::npos) {
-                new_consensus = best_branch.sequence;
-                break;
-            }
             i += 1;
         }
+
+        // parse variants from the consensus sequences
+        std::vector<Variant> candidate_variants;
+
+        for(size_t cs_idx = 0; cs_idx < candidate_sequences.size(); ++cs_idx) {
+            std::vector<Variant> variants = 
+                generate_variants_from_kLCS(ref_subseq, candidate_sequences[cs_idx], BUFFER);
+            candidate_variants.insert(candidate_variants.end(), variants.begin(), variants.end());
+        }
+
+        // translate variants into reference coordinates
+        for(size_t vi = 0; vi < candidate_variants.size(); ++vi) {
+            candidate_variants[vi].ref_name = contig;
+            candidate_variants[vi].ref_position += curr_ref_start;
+        }
+
+        // Score variants here
+        int max_variant_end = -1;
+
+        Haplotype subregion_haplotype = derived_haplotype.substr_by_reference(curr_ref_start, curr_ref_end);
+        std::vector<Variant> selected_variants = select_variants(candidate_variants, subregion_haplotype, event_sequences);
+        for(size_t i = 0; i < selected_variants.size(); ++i) {
+            int variant_end = selected_variants[i].ref_position + selected_variants[i].ref_seq.length() - 1;
+            max_variant_end = std::max(variant_end, max_variant_end);
+
+            derived_haplotype.apply_variant(selected_variants[i]);
+            if(opt::verbose > 0) {
+                selected_variants[i].write_vcf(stdout);
+            }
+        }
         
-        if(new_consensus.empty()) {
-            
-            // we didn't assemble a new consensus sequence
-            // add in the next MAX_EXTEND of reference sequence
-            std::string ref_extension = ref_string.substr(curr_ref_start - buffered_region_start, MAX_EXTEND);
-
-            // set curr_ref_start to the first base of the BUFFER flanking sequence
-            // this is where calling will start from next round
+        if(max_variant_end == -1) {
+            // no variants in region
             curr_ref_start += MAX_EXTEND - BUFFER;
-            consensus.append(ref_extension);
-
         } else {
-
-            // parse variants from the consensus
-            std::vector<Variant> variants = generate_variants_from_kLCS(ref_subseq, new_consensus, BUFFER);
-            
-            // translate variants into reference coordinates
-            for(size_t vi = 0; vi < variants.size(); ++vi) {
-                variants[vi].ref_name = contig;
-                variants[vi].ref_position += curr_ref_start;
-                variants[vi].write_vcf(stdout);
-            }
-
-            // Score variants here
-            Haplotype subregion_haplotype = derived_haplotype.substr_by_reference(curr_ref_start, curr_ref_end);
-            std::vector<Variant> selected_variants = select_variants(variants, subregion_haplotype, event_sequences);
-            for(size_t i = 0; i < selected_variants.size(); ++i) {
-                derived_haplotype.apply_variant(selected_variants[i]);
-                if(opt::verbose > 0) {
-                    selected_variants[i].write_vcf(stdout);
-                }
-            }
-            
-            printf("new consensus: %s\n", new_consensus.c_str());
-            printf("match pos: %zu\n", match_pos);
-            // update consensus sequence
-            consensus.append(new_consensus.substr(BUFFER));
-            curr_ref_start += match_pos;
+            curr_ref_start = max_variant_end;
         }
     }
     return derived_haplotype;
