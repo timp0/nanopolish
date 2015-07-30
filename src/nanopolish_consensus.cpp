@@ -669,18 +669,14 @@ int consensus_main(int argc, char** argv)
     fprintf(stderr, "TODO: train model\n");
     fprintf(stderr, "TODO: filter data\n");
 
-    for(; start_base < end_base; start_base += WINDOW_LENGTH) {
-    
-        int window_end = std::min(start_base + WINDOW_LENGTH, end_base);
-        Haplotype haplotype = call_variants_for_region_bb(contig, start_base, window_end);
+    Haplotype haplotype = call_variants_for_region_bb(contig, start_base, end_base);
 
-        fprintf(out_fp, ">%s:%d-%d\n%s\n", contig.c_str(), start_base, window_end, haplotype.get_sequence().c_str());
+    fprintf(out_fp, ">%s:%d-%d\n%s\n", contig.c_str(), start_base, end_base, haplotype.get_sequence().c_str());
 
-        if(!opt::output_vcf.empty()) {
-            std::vector<Variant> variants = haplotype.get_variants();
-            for(size_t vi = 0; vi < variants.size(); vi++) {
-                variants[vi].write_vcf(out_vcf);
-            }
+    if(!opt::output_vcf.empty()) {
+        std::vector<Variant> variants = haplotype.get_variants();
+        for(size_t vi = 0; vi < variants.size(); vi++) {
+            variants[vi].write_vcf(out_vcf);
         }
     }
 
