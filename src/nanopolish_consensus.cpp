@@ -166,7 +166,7 @@ void filter_outlier_data(std::vector<HMMInputData>& input, const std::string& se
         double n_events = abs(rs.event_start_idx - rs.event_stop_idx) + 1.0f;
         double lp_per_event = curr / n_events;
 
-        if(opt::verbose >= 1) {
+        if(opt::verbose >= 3) {
             fprintf(stderr, "OUTLIER_FILTER %d %.2lf %.2lf %.2lf\n", ri, curr, n_events, lp_per_event);
         }
 
@@ -176,6 +176,28 @@ void filter_outlier_data(std::vector<HMMInputData>& input, const std::string& se
     }
     input.swap(out_rs);
 }
+
+void filter_outlier_data_by_kmers(std::vector<HMMInputData>& input, const std::string& sequence)
+{
+    std::vector<HMMInputData> out_rs;
+    for(uint32_t ri = 0; ri < input.size(); ++ri) {
+        const HMMInputData& rs = input[ri];
+
+        double curr = score_sequence(sequence, rs);
+        double n_kmers = sequence.size() - K + 1;
+        double lp_per_kmer = curr / n_kmers;
+
+        if(opt::verbose >= 3) {
+            fprintf(stderr, "OUTLIER_FILTER %d %.2lf %.2lf %.2lf\n", ri, curr, n_kmers, lp_per_kmer);
+        }
+
+        if(fabs(lp_per_kmer) < 3.5f) {
+            out_rs.push_back(rs);
+        }
+    }
+    input.swap(out_rs);
+}
+
 
 // update the training data on the current segment
 void train_segment(HMMRealignmentInput& window, uint32_t segment_id)
@@ -365,6 +387,8 @@ Haplotype call_variants_for_region_bb(const std::string& contig, int region_star
         // Get the event sequences within this window
         std::string ref_subseq = alignments.get_reference_substring(contig, curr_ref_start, curr_ref_end);
         std::vector<HMMInputData> event_sequences = alignments.get_event_subsequences(contig, curr_ref_start, curr_ref_end);
+        
+        filter_outlier_data_by_kmers(event_sequences, ref_subseq);
 
         // Start the extension from the last BUFFER bases of the called sequence
         BranchSequence root = { ref_string.substr(curr_ref_start - buffered_region_start, BUFFER),
@@ -393,12 +417,16 @@ Haplotype call_variants_for_region_bb(const std::string& contig, int region_star
             
             if(opt::verbose > 2) {
                 fprintf(stderr, "\n==== Round %zu ====\n", i);
+                fprintf(stderr, "ref: %s\n", ref_string.c_str());
             }
 
             std::vector<BranchSequence> incoming;
             for(size_t branch_idx = 0; branch_idx < branches.size(); ++branch_idx) {
-                for(size_t base_idx = 0; base_idx < 4; ++base_idx) {
-                    std::string extended = branches[branch_idx].sequence + "ACGT"[base_idx];
+
+                std::vector<std::string> extension_set = generate_mers(1);
+
+                for(size_t ext_idx = 0; ext_idx < extension_set.size(); ++ext_idx) {
+                    std::string extended = branches[branch_idx].sequence + extension_set[ext_idx];
 
                     double score = 0.0f;
                     
@@ -419,6 +447,7 @@ Haplotype call_variants_for_region_bb(const std::string& contig, int region_star
             branches.clear();
             
             // cull bad branches
+            std::vector<double> score_with_best;
             for(size_t branch_idx = 0; branch_idx < incoming.size(); ++branch_idx) {
                 BranchSequence& branch = incoming[branch_idx];
                 double relative_score = branch.score - incoming[0].score;
@@ -436,7 +465,7 @@ Haplotype call_variants_for_region_bb(const std::string& contig, int region_star
                         // never check the reference for joining
                         branches.push_back(branch);
                     } else {
-                        std::string branch_suffix = branch.sequence.substr(branch.sequence.size()- BUFFER);
+                        std::string branch_suffix = branch.sequence.substr(branch.sequence.size() - BUFFER);
                         if(ref_subseq.rfind(branch_suffix) != std::string::npos) {
                             // branch has joined reference
                             joined = true;
@@ -453,7 +482,9 @@ Haplotype call_variants_for_region_bb(const std::string& contig, int region_star
                     std::string status = is_ref ? "*" : " ";
                     status += selected ? 's' : ' ';
                     status += joined ? 'j' : ' ';
-                    fprintf(stderr, "seq: %s %.2lf %s\n", branch.sequence.c_str(), relative_score, status.c_str());
+
+                    fprintf(stderr, "seq: %s %5.2lf %s\n", branch.sequence.c_str(), relative_score, status.c_str());
+                    
                 }
             }
 

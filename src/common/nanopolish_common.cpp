@@ -118,3 +118,15 @@ std::vector<std::string> split(std::string in, char delimiter)
     out.push_back(in.substr(lastPos));
     return out;
 }
+
+std::vector<std::string> generate_mers(size_t l)
+{
+    std::string mer(l, 'A');
+    std::string last(l, 'A');
+    std::vector<std::string> out;
+    do {
+        out.push_back(mer);
+        lexicographic_next(mer);
+    } while(mer != last);
+    return out;
+}

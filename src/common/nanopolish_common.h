@@ -180,4 +180,8 @@ void print_alignment(const std::string& name,
                      const HMMInputData& data,
                      const std::vector<AlignmentState>& alignment);
 
+
+// Generate the set of strings of length l
+std::vector<std::string> generate_mers(size_t l);
+
 #endif

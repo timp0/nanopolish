@@ -318,6 +318,7 @@ inline float profile_hmm_fill_generic_local(const char* sequence,
             float m_k = bt.lp_km + output.get(row - 1, prev_block_offset + PS_KMER_SKIP);
 
             // Only allow skips then entry to the first k-mer
+            //float m_s = lp_sm + pre_flank[row - 1];
             float m_s = -INFINITY;
             output.update_4(row, curr_block_offset + PS_MATCH, m_m, m_e, m_k, m_s, lp_emission_m);
 
@@ -332,11 +333,15 @@ inline float profile_hmm_fill_generic_local(const char* sequence,
             output.update_4(row, curr_block_offset + PS_KMER_SKIP, k_m, -INFINITY, k_k, -INFINITY, 0.0f); // no emission
 
             // transition from this state directly to the end of the alignment
-            float lp_end = kmer_idx == last_kmer_idx ? 
-                       lp_ms + output.get(row, curr_block_offset + PS_MATCH) + post_flank[row - 1] :
-                       -INFINITY;
+            if(kmer_idx == last_kmer_idx) {
+                float lp1 = lp_ms + output.get(row, curr_block_offset + PS_MATCH) + post_flank[row - 1];
+                float lp2 = lp_ms + output.get(row, curr_block_offset + PS_EVENT_SPLIT) + post_flank[row - 1];
+                float lp3 = lp_ms + output.get(row, curr_block_offset + PS_KMER_SKIP) + post_flank[row - 1];
 
-            output.update_end(lp_end, row, curr_block_offset + PS_MATCH);
+                output.update_end(lp1, row, curr_block_offset + PS_MATCH);
+                output.update_end(lp2, row, curr_block_offset + PS_EVENT_SPLIT);
+                output.update_end(lp3, row, curr_block_offset + PS_KMER_SKIP);
+            }
 
 #ifdef DEBUG_LOCAL_ALIGNMENT
             printf("[%d %d] start: %.2lf  pre: %.2lf fm: %.2lf\n", event_idx, kmer_idx, m_s + lp_emission_m, pre_flank[row - 1], output.get(row, curr_block_offset + PS_MATCH));
