@@ -171,7 +171,6 @@ std::vector<Variant> select_variants(const std::vector<Variant>& candidate_varia
                 }
             }
             
-            v.write_vcf(stdout);
             if(variant_lp > best_variant_lp) {
                 best_variant_lp = variant_lp;
                 best_variant_idx = i;

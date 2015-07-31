@@ -337,7 +337,7 @@ Haplotype call_variants_for_region_bb(const std::string& contig, int region_star
 
     if(region_start < BUFFER)
         region_start = BUFFER;
-    region_end = std::min(region_end, get_contig_length(contig) - BUFFER);
+    region_end = std::min(region_end, get_contig_length(contig) - BUFFER - 1);
     
     size_t buffered_region_start = region_start - BUFFER;
     size_t buffered_region_end = region_end + BUFFER;
@@ -371,12 +371,14 @@ Haplotype call_variants_for_region_bb(const std::string& contig, int region_star
                                 -INFINITY };
 
         // Check the invariant holds
-        printf("calling region start: %zu brs: %zu root: %s ref: %s\n", 
-            curr_ref_start, 
-            buffered_region_start,
-            root.sequence.c_str(), 
-            ref_string.substr(curr_ref_start - buffered_region_start, BUFFER).c_str());
-        printf("root: %s\n", root.sequence.c_str());
+        if(opt::verbose > 2) {
+            fprintf(stderr, "calling region start: %zu brs: %zu root: %s ref: %s\n", 
+                curr_ref_start, 
+                buffered_region_start,
+                root.sequence.c_str(), 
+                ref_string.substr(curr_ref_start - buffered_region_start, BUFFER).c_str());
+            fprintf(stderr, "root: %s\n", root.sequence.c_str());
+        }
 
         assert(root.sequence == ref_string.substr(curr_ref_start - buffered_region_start, BUFFER));
         
@@ -389,7 +391,9 @@ Haplotype call_variants_for_region_bb(const std::string& contig, int region_star
         std::string new_consensus = "";
         while(i < MAX_EXTEND) {
             
-            printf("\n==== Round %zu ====\n", i);
+            if(opt::verbose > 2) {
+                fprintf(stderr, "\n==== Round %zu ====\n", i);
+            }
 
             std::vector<BranchSequence> incoming;
             for(size_t branch_idx = 0; branch_idx < branches.size(); ++branch_idx) {
@@ -444,11 +448,13 @@ Haplotype call_variants_for_region_bb(const std::string& contig, int region_star
                     }
                 }
 
-                // Debug print
-                std::string status = is_ref ? "*" : " ";
-                status += selected ? 's' : ' ';
-                status += joined ? 'j' : ' ';
-                printf("seq: %s %.2lf %s\n", branch.sequence.c_str(), relative_score, status.c_str());
+                if(opt::verbose > 2) {
+                    // Debug print
+                    std::string status = is_ref ? "*" : " ";
+                    status += selected ? 's' : ' ';
+                    status += joined ? 'j' : ' ';
+                    fprintf(stderr, "seq: %s %.2lf %s\n", branch.sequence.c_str(), relative_score, status.c_str());
+                }
             }
 
             i += 1;
@@ -480,7 +486,7 @@ Haplotype call_variants_for_region_bb(const std::string& contig, int region_star
 
             derived_haplotype.apply_variant(selected_variants[i]);
             if(opt::verbose > 0) {
-                selected_variants[i].write_vcf(stdout);
+                selected_variants[i].write_vcf(stderr);
             }
         }
         
