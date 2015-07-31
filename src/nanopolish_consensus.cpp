@@ -473,6 +473,14 @@ Haplotype call_variants_for_region_bb(const std::string& contig, int region_star
         for(size_t vi = 0; vi < candidate_variants.size(); ++vi) {
             candidate_variants[vi].ref_name = contig;
             candidate_variants[vi].ref_position += curr_ref_start;
+            
+            if(opt::verbose > 1) {
+                candidate_variants[vi].write_vcf(stderr);
+            }
+        }
+
+        if(opt::snps_only) {
+            filter_out_non_snp_variants(candidate_variants);
         }
 
         // Score variants here
