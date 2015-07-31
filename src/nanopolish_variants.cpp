@@ -116,8 +116,8 @@ void filter_out_non_snp_variants(std::vector<Variant>& variants)
 {
     std::vector<Variant> tmp;
     for(size_t i = 0; i < variants.size(); ++i) {
-        bool is_snp = variants[i].ref_seq.length() == 1 &&
-                      variants[i].alt_seq.length() == 1;
+        bool is_snp = variants[i].ref_seq.length() == 
+                      variants[i].alt_seq.length();
         if(is_snp) {
             tmp.push_back(variants[i]);
         }
