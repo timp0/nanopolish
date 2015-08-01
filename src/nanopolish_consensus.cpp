@@ -388,7 +388,7 @@ Haplotype call_variants_for_region_bb(const std::string& contig, int region_star
         std::string ref_subseq = alignments.get_reference_substring(contig, curr_ref_start, curr_ref_end);
         std::vector<HMMInputData> event_sequences = alignments.get_event_subsequences(contig, curr_ref_start, curr_ref_end);
         
-        filter_outlier_data_by_kmers(event_sequences, ref_subseq);
+        //filter_outlier_data_by_kmers(event_sequences, ref_subseq);
 
         // Start the extension from the last BUFFER bases of the called sequence
         BranchSequence root = { ref_string.substr(curr_ref_start - buffered_region_start, BUFFER),
