@@ -321,6 +321,7 @@ std::vector<Variant> generate_variants_from_kLCS(const std::string& reference, c
         v.ref_position = ref_s + result[match_idx].i;
         v.ref_seq = tmp_ref;
         v.alt_seq = tmp_read;
+        v.quality = 0.0f;
         out.push_back(v);
 
         match_idx += 1;
@@ -352,10 +353,101 @@ struct BranchSequence
     static bool sortByScore(const BranchSequence& a, const BranchSequence& b) { return a.score > b.score; }
 };
 
+std::vector<std::string> search_for_extensions(const std::string& root, 
+                                               const std::string& ref_subseq, 
+                                               const std::vector<HMMInputData>& event_sequences,
+                                               const size_t required_match_length,
+                                               const size_t max_extension)
+{
+    std::vector<std::string> candidate_sequences;
+    BranchSequence root_elem = { root, -INFINITY };
+    std::vector<BranchSequence> branches(1, root_elem);
+
+    size_t round = 0;
+
+    while(round++ < max_extension) {
+        
+        if(opt::verbose > 2) {
+            fprintf(stderr, "\n==== Round %zu ====\n", round);
+            fprintf(stderr, "ref: %s\n", ref_subseq.c_str());
+        }
+
+        std::vector<BranchSequence> incoming;
+        for(size_t branch_idx = 0; branch_idx < branches.size(); ++branch_idx) {
+
+            std::vector<std::string> extension_set = generate_mers(1);
+
+            for(size_t ext_idx = 0; ext_idx < extension_set.size(); ++ext_idx) {
+                std::string extended = branches[branch_idx].sequence + extension_set[ext_idx];
+
+                double score = 0.0f;
+                
+                #pragma omp parallel for
+                for(size_t j = 0; j < event_sequences.size(); ++j) {
+                    double s = profile_hmm_score(extended, event_sequences[j]);
+                    #pragma omp critical
+                    score += s;
+                }
+
+                BranchSequence new_branch = { extended, score };
+                incoming.push_back(new_branch);
+            }
+        }
+        
+        // sort by score
+        std::sort(incoming.begin(), incoming.end(), BranchSequence::sortByScore);
+        branches.clear();
+        
+        // cull bad branches
+        std::vector<double> score_with_best;
+        for(size_t branch_idx = 0; branch_idx < incoming.size(); ++branch_idx) {
+            BranchSequence& branch = incoming[branch_idx];
+            double relative_score = branch.score - incoming[0].score;
+            bool is_ref = ref_subseq.find(branch.sequence) != std::string::npos;
+            bool selected = false;
+
+            if( (relative_score > -200.0f && branch_idx < 16) || branch_idx < 4 || is_ref) {
+                selected = true;
+            }
+         
+            bool joined = false;
+            // Check if this branch has rejoined the reference
+            if(selected) {
+                if(is_ref) {
+                    // never check the reference for joining
+                    branches.push_back(branch);
+                } else {
+                    std::string branch_suffix = branch.sequence.substr(branch.sequence.size() - required_match_length);
+                    if(ref_subseq.rfind(branch_suffix) != std::string::npos) {
+                        // branch has joined reference
+                        joined = true;
+                        candidate_sequences.push_back(branch.sequence);
+                    } else {
+                        // continue extending
+                        branches.push_back(branch);
+                    }
+                }
+            }
+
+            if(opt::verbose > 2) {
+                // Debug print
+                std::string status = is_ref ? "*" : " ";
+                status += selected ? 's' : ' ';
+                status += joined ? 'j' : ' ';
+
+                fprintf(stderr, "seq: %s %5.2lf %s\n", branch.sequence.c_str(), relative_score, status.c_str());
+                
+            }
+        }
+    }
+    return candidate_sequences;
+}
+
 // Branch and bound algorithm for calling variants
 Haplotype call_variants_for_region_bb(const std::string& contig, int region_start, int region_end)
 {
     const int BUFFER = 10;
+    const int MAX_EXTEND = 20;
 
     if(region_start < BUFFER)
         region_start = BUFFER;
@@ -391,105 +483,15 @@ Haplotype call_variants_for_region_bb(const std::string& contig, int region_star
         //filter_outlier_data_by_kmers(event_sequences, ref_subseq);
 
         // Start the extension from the last BUFFER bases of the called sequence
-        BranchSequence root = { ref_string.substr(curr_ref_start - buffered_region_start, BUFFER),
-                                -INFINITY };
-
-        // Check the invariant holds
+        std::string root = ref_string.substr(curr_ref_start - buffered_region_start, BUFFER);
         if(opt::verbose > 2) {
-            fprintf(stderr, "calling region start: %zu brs: %zu root: %s ref: %s\n", 
+            fprintf(stderr, "calling region start: %zu brs: %zu root: %s\n", 
                 curr_ref_start, 
                 buffered_region_start,
-                root.sequence.c_str(), 
-                ref_string.substr(curr_ref_start - buffered_region_start, BUFFER).c_str());
-            fprintf(stderr, "root: %s\n", root.sequence.c_str());
+                root.c_str());
         }
 
-        assert(root.sequence == ref_string.substr(curr_ref_start - buffered_region_start, BUFFER));
-        
-        std::vector<BranchSequence> branches(1, root);
-
-        size_t MAX_EXTEND = 20;
-        size_t i = 0;
-
-        std::vector<std::string> candidate_sequences;
-        std::string new_consensus = "";
-        while(i < MAX_EXTEND) {
-            
-            if(opt::verbose > 2) {
-                fprintf(stderr, "\n==== Round %zu ====\n", i);
-                fprintf(stderr, "ref: %s\n", ref_string.c_str());
-            }
-
-            std::vector<BranchSequence> incoming;
-            for(size_t branch_idx = 0; branch_idx < branches.size(); ++branch_idx) {
-
-                std::vector<std::string> extension_set = generate_mers(1);
-
-                for(size_t ext_idx = 0; ext_idx < extension_set.size(); ++ext_idx) {
-                    std::string extended = branches[branch_idx].sequence + extension_set[ext_idx];
-
-                    double score = 0.0f;
-                    
-                    #pragma omp parallel for
-                    for(size_t j = 0; j < event_sequences.size(); ++j) {
-                        double s = profile_hmm_score(extended, event_sequences[j]);
-                        #pragma omp critical
-                        score += s;
-                    }
-
-                    BranchSequence new_branch = { extended, score };
-                    incoming.push_back(new_branch);
-                }
-            }
-            
-            // sort by score
-            std::sort(incoming.begin(), incoming.end(), BranchSequence::sortByScore);
-            branches.clear();
-            
-            // cull bad branches
-            std::vector<double> score_with_best;
-            for(size_t branch_idx = 0; branch_idx < incoming.size(); ++branch_idx) {
-                BranchSequence& branch = incoming[branch_idx];
-                double relative_score = branch.score - incoming[0].score;
-                bool is_ref = ref_string.find(branch.sequence) != std::string::npos;
-                bool selected = false;
-
-                if( (relative_score > -200.0f && branch_idx < 16) || branch_idx < 4 || is_ref) {
-                    selected = true;
-                }
-             
-                bool joined = false;
-                // Check if this branch has rejoined the reference
-                if(selected) {
-                    if(is_ref) {
-                        // never check the reference for joining
-                        branches.push_back(branch);
-                    } else {
-                        std::string branch_suffix = branch.sequence.substr(branch.sequence.size() - BUFFER);
-                        if(ref_subseq.rfind(branch_suffix) != std::string::npos) {
-                            // branch has joined reference
-                            joined = true;
-                            candidate_sequences.push_back(branch.sequence);
-                        } else {
-                            // continue extending
-                            branches.push_back(branch);
-                        }
-                    }
-                }
-
-                if(opt::verbose > 2) {
-                    // Debug print
-                    std::string status = is_ref ? "*" : " ";
-                    status += selected ? 's' : ' ';
-                    status += joined ? 'j' : ' ';
-
-                    fprintf(stderr, "seq: %s %5.2lf %s\n", branch.sequence.c_str(), relative_score, status.c_str());
-                    
-                }
-            }
-
-            i += 1;
-        }
+        std::vector<std::string> candidate_sequences = search_for_extensions(root, ref_subseq, event_sequences, BUFFER, MAX_EXTEND);
 
         // parse variants from the consensus sequences
         std::vector<Variant> candidate_variants;
@@ -514,9 +516,9 @@ Haplotype call_variants_for_region_bb(const std::string& contig, int region_star
             filter_out_non_snp_variants(candidate_variants);
         }
 
-        // Score variants here
         int max_variant_end = -1;
 
+        // select final variant list
         Haplotype subregion_haplotype = derived_haplotype.substr_by_reference(curr_ref_start, curr_ref_end);
         std::vector<Variant> selected_variants = select_variants(candidate_variants, subregion_haplotype, event_sequences);
         for(size_t i = 0; i < selected_variants.size(); ++i) {
