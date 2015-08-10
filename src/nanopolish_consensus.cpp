@@ -434,8 +434,8 @@ std::vector<std::string> search_for_extensions(const std::string& root,
                 std::string status = is_ref ? "*" : " ";
                 status += selected ? 's' : ' ';
                 status += joined ? 'j' : ' ';
-
-                fprintf(stderr, "seq: %s %5.2lf %s\n", branch.sequence.c_str(), relative_score, status.c_str());
+                
+                fprintf(stderr, "seq: %s %5.2lf %s\n", branch.sequence.c_str(), branch_idx == 0 ? branch.score : relative_score, status.c_str());
                 
             }
         }
