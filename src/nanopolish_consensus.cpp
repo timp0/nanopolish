@@ -15,6 +15,7 @@
 #include <math.h>
 #include <sys/time.h>
 #include <algorithm>
+#include <queue>
 #include <sstream>
 #include <set>
 #include <omp.h>
@@ -345,6 +346,20 @@ std::vector<Variant> generate_variants_from_reads(const std::string& reference, 
     return out;
 }
 
+double parallel_score(const std::string& sequence, const std::vector<HMMInputData>& event_sequences)
+{
+    double score = 0.0f;
+
+    #pragma omp parallel for
+    for(size_t i = 0; i < event_sequences.size(); ++i) {
+        double s = profile_hmm_score(sequence, event_sequences[i]);
+
+        #pragma omp critical
+        score += s;
+    }
+    return score;
+}
+
 struct BranchSequence
 {
     std::string sequence;
@@ -380,15 +395,7 @@ std::vector<std::string> search_for_extensions(const std::string& root,
             for(size_t ext_idx = 0; ext_idx < extension_set.size(); ++ext_idx) {
                 std::string extended = branches[branch_idx].sequence + extension_set[ext_idx];
 
-                double score = 0.0f;
-                
-                #pragma omp parallel for
-                for(size_t j = 0; j < event_sequences.size(); ++j) {
-                    double s = profile_hmm_score(extended, event_sequences[j]);
-                    #pragma omp critical
-                    score += s;
-                }
-
+                double score = parallel_score(extended, event_sequences);
                 BranchSequence new_branch = { extended, score };
                 incoming.push_back(new_branch);
             }
@@ -406,7 +413,7 @@ std::vector<std::string> search_for_extensions(const std::string& root,
             bool is_ref = ref_subseq.find(branch.sequence) != std::string::npos;
             bool selected = false;
 
-            if( (relative_score > -200.0f && branch_idx < 16) || branch_idx < 4 || is_ref) {
+            if( branch_idx < 16 || is_ref) {
                 selected = true;
             }
          
@@ -677,7 +684,6 @@ void parse_consensus_options(int argc, char** argv)
         exit(EXIT_FAILURE);
     }
 }
-
 
 int consensus_main(int argc, char** argv)
 {
