@@ -331,7 +331,7 @@ std::vector<Variant> generate_variants_from_kLCS(const std::string& reference, c
     return out;
 }
 
-std::vector<Variant> generate_variants_from_reads(const std::string& reference, const std::vector<std::string>& reads)
+std::vector<Variant> generate_variants_from_reads(const std::string& contig, int ref_offset, const std::string& reference, const std::vector<std::string>& reads)
 {
     std::vector<Variant> out;
 
@@ -342,7 +342,11 @@ std::vector<Variant> generate_variants_from_reads(const std::string& reference, 
             continue;
 
         std::vector<Variant> read_variants = generate_variants_from_kLCS(reference, reads[ri], K);
-        out.insert(out.end(), read_variants.begin(), read_variants.end());
+        for(size_t vi = 0; vi < read_variants.size(); ++vi) {
+            read_variants[vi].ref_name = contig;
+            read_variants[vi].ref_position += ref_offset;
+            out.push_back(read_variants[vi]);
+        }
     }
     return out;
 }
@@ -379,6 +383,8 @@ std::vector<std::string> search_for_extensions(const std::string& root,
     BranchSequence root_elem = { root, -INFINITY };
     std::vector<BranchSequence> branches(1, root_elem);
 
+    size_t ext_length = 3;
+    std::vector<std::string> extension_set = generate_mers(ext_length);
     size_t round = 0;
 
     while(round++ < max_extension) {
@@ -390,12 +396,8 @@ std::vector<std::string> search_for_extensions(const std::string& root,
 
         std::vector<BranchSequence> incoming;
         for(size_t branch_idx = 0; branch_idx < branches.size(); ++branch_idx) {
-
-            std::vector<std::string> extension_set = generate_mers(1);
-
             for(size_t ext_idx = 0; ext_idx < extension_set.size(); ++ext_idx) {
                 std::string extended = branches[branch_idx].sequence + extension_set[ext_idx];
-
                 double score = parallel_score(extended, event_sequences);
                 BranchSequence new_branch = { extended, score };
                 incoming.push_back(new_branch);
@@ -409,12 +411,13 @@ std::vector<std::string> search_for_extensions(const std::string& root,
         // cull bad branches
         std::vector<double> score_with_best;
         for(size_t branch_idx = 0; branch_idx < incoming.size(); ++branch_idx) {
+
             BranchSequence& branch = incoming[branch_idx];
             double relative_score = branch.score - incoming[0].score;
             bool is_ref = ref_subseq.find(branch.sequence) != std::string::npos;
             bool selected = false;
 
-            if( branch_idx < 16 || is_ref) {
+            if( branch_idx < 1) {
                 selected = true;
             }
          
@@ -432,7 +435,8 @@ std::vector<std::string> search_for_extensions(const std::string& root,
                         candidate_sequences.push_back(branch.sequence);
                     } else {
                         // continue extending
-                        branches.push_back(branch);
+                        BranchSequence new_branch = { branch.sequence.substr(0, branch.sequence.length() - ext_length + 1), -INFINITY };
+                        branches.push_back(new_branch);
                     }
                 }
             }
@@ -612,16 +616,18 @@ Haplotype call_variants_for_region(const std::string& contig, int region_start, 
             fprintf(stderr, "%s\n", ref_string.c_str());
         }
 
-        std::vector<Variant> candidate_variants = alignments.get_variants_in_region(contig, buffer_start, buffer_end, 0.1);
+        std::vector<Variant> candidate_variants = alignments.get_variants_in_region(contig, buffer_start, buffer_end, 0.2);
 
         // extract potential variants from read strings
         //std::vector<Variant> candidate_variants = generate_all_snps(ref_string);
 
-        //std::vector<Variant> candidate_variants = generate_variants_from_reads(ref_string, read_strings);
-        //filter_variants_by_count(candidate_variants, opt::min_read_evidence);
+        /*
+        std::vector<Variant> candidate_variants = generate_variants_from_reads(contig, buffer_start, ref_string, read_strings);
+        filter_variants_by_count(candidate_variants, opt::min_read_evidence);
         if(opt::snps_only) {
             filter_out_non_snp_variants(candidate_variants);
         }
+        */
 
         // remove variants that are inside of the buffer regions
         std::vector<Variant> tmp;
@@ -631,6 +637,9 @@ Haplotype call_variants_for_region(const std::string& contig, int region_start, 
             int p = v.ref_position;
             if(p - buffer_start >= BUFFER && buffer_end - p >= BUFFER) {
                 tmp.push_back(v);
+                if(opt::verbose > 2) {
+                    v.write_vcf(stderr);
+                }
             }
         }
         candidate_variants.swap(tmp);
@@ -750,7 +759,7 @@ int consensus_main(int argc, char** argv)
     fprintf(stderr, "TODO: train model\n");
     fprintf(stderr, "TODO: filter data\n");
 
-    Haplotype haplotype = call_variants_for_region_bb(contig, start_base, end_base);
+    Haplotype haplotype = call_variants_for_region(contig, start_base, end_base);
 
     fprintf(out_fp, ">%s:%d-%d\n%s\n", contig.c_str(), start_base, end_base, haplotype.get_sequence().c_str());
 
