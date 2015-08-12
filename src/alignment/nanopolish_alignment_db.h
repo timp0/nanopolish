@@ -62,6 +62,8 @@ class AlignmentDB
                                                          int start_position,
                                                          int stop_position) const;
 
+        std::vector<HMMInputData> get_events_aligned_to(const std::string& contig, int position) const;
+
         std::vector<Variant> get_variants_in_region(const std::string& contig,
                                                     int start_position,
                                                     int stop_position,

@@ -21,6 +21,7 @@
 #include <omp.h>
 #include <getopt.h>
 #include "htslib/faidx.h"
+#include "nanopolish_math.h"
 #include "nanopolish_poremodel.h"
 #include "nanopolish_khmm_parameters.h"
 #include "nanopolish_matrix.h"
@@ -469,7 +470,7 @@ Haplotype call_variants_for_region_bb(const std::string& contig, int region_star
     Haplotype derived_haplotype(contig,
                                 alignments.get_region_start(),
                                 alignments.get_reference());
-
+    
     // What base are we currently calling from
     size_t curr_ref_start = buffered_region_start;
 
@@ -496,6 +497,32 @@ Haplotype call_variants_for_region_bb(const std::string& contig, int region_star
                 curr_ref_start, 
                 buffered_region_start,
                 root.c_str());
+        }
+
+        // screen out trivial reference extensions quickly
+        std::vector<std::string> extension_set = generate_mers(3);
+        char ref_base = ref_string[curr_ref_start - buffered_region_start + BUFFER];
+        double best_score = -INFINITY;
+        std::string best_ext;
+
+        for(size_t ei = 0; ei < extension_set.size(); ei++) {
+            std::string extended = root + extension_set[ei];
+            double score = parallel_score(extended, event_sequences);
+
+            if(score > best_score) {
+                best_score = score;
+                best_ext = extension_set[ei];
+            }
+        }
+
+        /*
+        printf("Ref:  %s\n", ref_string.substr(curr_ref_start - buffered_region_start).c_str());
+        printf("Root: %s\n", root.c_str());
+        printf("[%d] Best: %.2lf base: %s ref: %c delta: %.2lf\n", curr_ref_start + BUFFER, best_score, best_ext.c_str(), ref_base, best_score - 0);
+        */
+        if(best_ext.front() == ref_base) {
+            curr_ref_start += 1;
+            continue;
         }
 
         std::vector<std::string> candidate_sequences = search_for_extensions(root, ref_subseq, event_sequences, BUFFER, MAX_EXTEND);
@@ -540,7 +567,7 @@ Haplotype call_variants_for_region_bb(const std::string& contig, int region_star
         
         if(max_variant_end == -1) {
             // no variants in region
-            curr_ref_start += MAX_EXTEND - BUFFER;
+            curr_ref_start += 1;
         } else {
             curr_ref_start = max_variant_end;
         }

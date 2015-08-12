@@ -118,6 +118,38 @@ std::vector<HMMInputData> AlignmentDB::get_event_subsequences(const std::string&
     return out;
 }
 
+std::vector<HMMInputData> AlignmentDB::get_events_aligned_to(const std::string& contig,
+                                                             int position) const
+{
+    assert(m_region_contig == contig);
+    assert(m_region_start <= position);
+    assert(m_region_end >= position);
+
+    std::vector<HMMInputData> out;
+    for(size_t i = 0; i < m_event_records.size(); ++i) {
+        const EventAlignmentRecord& record = m_event_records[i];
+        if(record.aligned_events.empty())
+            continue;
+
+        HMMInputData data;
+        data.read = record.sr;
+        data.anchor_index = -1; // unused
+        data.strand = record.strand;
+        data.rc = record.rc;
+        data.event_stride = record.stride;
+    
+        AlignedPairConstIter start_iter;
+        AlignedPairConstIter stop_iter;
+        bool bounded = _find_iter_by_ref_bounds(record.aligned_events, position, position, start_iter, stop_iter);
+        if(bounded && start_iter->ref_pos == position) {
+            data.event_start_idx = start_iter->read_pos;
+            data.event_stop_idx = start_iter->read_pos;
+            out.push_back(data);
+        }
+    }
+    return out;
+}
+
 std::vector<Variant> AlignmentDB::get_variants_in_region(const std::string& contig,
                                                          int start_position,
                                                          int stop_position,
@@ -375,7 +407,7 @@ bool AlignmentDB::_find_iter_by_ref_bounds(const std::vector<AlignedPair>& pairs
     stop_iter = std::lower_bound(pairs.begin(), pairs.end(),
                                  ref_stop, lb_comp);
     
-    if(start_iter == pairs.end() || stop_iter == pairs.end() || start_iter == stop_iter)
+    if(start_iter == pairs.end() || stop_iter == pairs.end())
         return false;
     
     // require at least one aligned reference base at or outside the boundary
