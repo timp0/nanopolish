@@ -153,34 +153,38 @@ std::vector<HMMInputData> AlignmentDB::get_events_aligned_to(const std::string& 
 std::vector<Variant> AlignmentDB::get_variants_in_region(const std::string& contig,
                                                          int start_position,
                                                          int stop_position,
-                                                         double min_frequency) const
+                                                         double min_frequency,
+                                                         int min_depth) const
 {
     std::vector<Variant> variants;
     std::map<std::string, std::pair<Variant, int>> map;
-    
+    std::vector<int> depth(stop_position - start_position + 1, 0);
+
     size_t num_aligned_reads = 0;
 
     for(size_t i = 0; i < m_sequence_records.size(); ++i) {
         const SequenceAlignmentRecord& record = m_sequence_records[i];
         if(record.aligned_bases.empty())
             continue;
-        
+
         AlignedPairConstIter start_iter;
         AlignedPairConstIter stop_iter;
-        bool bounded = _find_iter_by_ref_bounds(record.aligned_bases, start_position, stop_position, start_iter, stop_iter);
-        
-        if(!bounded) {
-            continue;
-        }
-        num_aligned_reads += 1;
+        _find_iter_by_ref_bounds(record.aligned_bases, start_position, stop_position, start_iter, stop_iter);
         
         //printf("[%zu] iter: [%d %d] [%d %d] first: %d last: %d\n", i, start_iter->ref_pos, start_iter->read_pos, stop_iter->ref_pos, stop_iter->read_pos, 
         //            record.aligned_bases.front().ref_pos, record.aligned_bases.back().ref_pos);
-
-        while(start_iter != stop_iter) {
-
+        for(; start_iter != stop_iter; ++start_iter) {
+            
+            int rp = start_iter->ref_pos;
             char rb = m_region_ref_sequence[start_iter->ref_pos - m_region_start];
             char ab = record.sequence[start_iter->read_pos];
+
+            if(rp < start_position || rp > stop_position) {
+                continue;
+            }
+            
+            // Increment depth
+            depth[rp - start_position]++;
 
             if(rb != ab) {
                 Variant v;
@@ -197,22 +201,22 @@ std::vector<Variant> AlignmentDB::get_variants_in_region(const std::string& cont
                     iter->second.second += 1;
                 }
             }
-
-            start_iter++;
         }
     }
 
     for(auto iter = map.begin(); iter != map.end(); ++iter) {
         Variant& v = iter->second.first;
         size_t count = iter->second.second;
-        double f = (double)count / num_aligned_reads;
-        if(f >= min_frequency) {
+        size_t d = depth[v.ref_position - start_position];
+        double f = (double)count / d;
+        if(f >= min_frequency && d >= min_depth) {
             v.add_info("BaseCalledReadsWithVariant", count);
             v.add_info("BaseCalledFrequency", f);
             variants.push_back(v);
         }
     }
 
+    std::sort(variants.begin(), variants.end(), sortByPosition);
     return variants;
 }
         

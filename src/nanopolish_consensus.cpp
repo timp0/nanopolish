@@ -616,7 +616,7 @@ Haplotype call_variants_for_region(const std::string& contig, int region_start, 
             fprintf(stderr, "%s\n", ref_string.c_str());
         }
 
-        std::vector<Variant> candidate_variants = alignments.get_variants_in_region(contig, buffer_start, buffer_end, 0.2);
+        std::vector<Variant> candidate_variants = alignments.get_variants_in_region(contig, buffer_start, buffer_end, 0.2, 20);
 
         // extract potential variants from read strings
         //std::vector<Variant> candidate_variants = generate_all_snps(ref_string);
@@ -653,6 +653,83 @@ Haplotype call_variants_for_region(const std::string& contig, int region_start, 
                 selected_variants[i].write_vcf(stdout);
             }
         }
+    }
+
+    return derived_haplotype;
+}
+
+Haplotype call_variants_for_region_lr(const std::string& contig, int region_start, int region_end)
+{
+    const int BUFFER = 20;
+    int STRIDE = 100;
+
+    if(region_start < BUFFER)
+        region_start = BUFFER;
+
+    // load the region, accounting for the buffering
+    AlignmentDB alignments(opt::reads_file, opt::genome_file, opt::bam_file, opt::event_bam_file);
+    alignments.load_region(contig, region_start - BUFFER, region_end + BUFFER);
+    Haplotype derived_haplotype(contig,
+                                alignments.get_region_start(),
+                                alignments.get_reference());
+
+    // Step 1. Discover putative variants across the whole region
+    std::vector<Variant> candidate_variants = alignments.get_variants_in_region(contig, region_start, region_end, 0.2, 20);
+
+    // Step 2. Add variants to the haplotypes
+    size_t calling_span = 10;
+    size_t curr_variant_idx = 0;
+    while(curr_variant_idx < candidate_variants.size()) {
+        
+        size_t end_variant_idx = curr_variant_idx;
+        while(end_variant_idx < candidate_variants.size()) {
+            int distance = candidate_variants[end_variant_idx].ref_position - 
+                           candidate_variants[curr_variant_idx].ref_position;
+            if(distance > calling_span)
+                break;
+            end_variant_idx++;
+        }
+    
+        size_t num_variants = end_variant_idx - curr_variant_idx;
+        int calling_start = candidate_variants[curr_variant_idx].ref_position - calling_span;
+        int calling_end = candidate_variants[end_variant_idx - 1].ref_position +
+                          candidate_variants[end_variant_idx - 1].ref_seq.length() +
+                          calling_span;
+        int calling_size = calling_end - calling_start;
+
+        if(opt::verbose > 2) {
+            fprintf(stderr, "%zu variants in span [%d %d]\n", num_variants, calling_start, calling_end);
+        }
+        
+        if(num_variants <= 10 && calling_size <= 100) {
+
+            // Subset the haplotype to the region we are calling
+            Haplotype calling_haplotype = 
+                derived_haplotype.substr_by_reference(calling_start, calling_end);
+            
+            // Get the events for the calling region
+            std::vector<HMMInputData> event_sequences = 
+                alignments.get_event_subsequences(contig, calling_start, calling_end);
+            
+            // Subset the variants
+            std::vector<Variant> calling_variants(candidate_variants.begin() + curr_variant_idx, 
+                                                  candidate_variants.begin() + end_variant_idx);
+            
+            // Select the best set of variants
+            std::vector<Variant> selected_variants = 
+                select_variant_set(calling_variants, calling_haplotype, event_sequences);
+
+            // Apply them to the final haplotype
+            for(size_t vi = 0; vi < selected_variants.size(); vi++) {
+                derived_haplotype.apply_variant(selected_variants[vi]);
+
+                if(opt::verbose > 1) {
+                    selected_variants[vi].write_vcf(stderr);
+                }
+            }
+        }
+
+        curr_variant_idx = end_variant_idx;
     }
 
     return derived_haplotype;
@@ -759,7 +836,7 @@ int consensus_main(int argc, char** argv)
     fprintf(stderr, "TODO: train model\n");
     fprintf(stderr, "TODO: filter data\n");
 
-    Haplotype haplotype = call_variants_for_region(contig, start_base, end_base);
+    Haplotype haplotype = call_variants_for_region_lr(contig, start_base, end_base);
 
     fprintf(out_fp, ">%s:%d-%d\n%s\n", contig.c_str(), start_base, end_base, haplotype.get_sequence().c_str());
 
