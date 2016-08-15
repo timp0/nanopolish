@@ -42,7 +42,7 @@ HTS_INCLUDE=-I./htslib
 FAST5_INCLUDE=-I./fast5
 
 # Include the eigen headers
-EIGEN_INCLUDE=./eigen
+EIGEN_INCLUDE=-I./eigen
 
 # Include the src subdirectories
 NP_INCLUDE=$(addprefix -I./, $(SUBDIRS))
