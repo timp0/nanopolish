@@ -41,11 +41,14 @@ HTS_INCLUDE=-I./htslib
 # Include the header-only fast5 library
 FAST5_INCLUDE=-I./fast5
 
+# Include the eigen headers
+EIGEN_INCLUDE=./eigen
+
 # Include the src subdirectories
 NP_INCLUDE=$(addprefix -I./, $(SUBDIRS))
 
 # Add include flags
-CPPFLAGS += $(H5_INCLUDE) $(HTS_INCLUDE) $(FAST5_INCLUDE) $(NP_INCLUDE)
+CPPFLAGS += $(H5_INCLUDE) $(HTS_INCLUDE) $(FAST5_INCLUDE) $(EIGEN_INCLUDE) $(NP_INCLUDE)
 
 # Main programs to build
 PROGRAM=nanopolish
