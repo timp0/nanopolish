@@ -135,18 +135,56 @@ const char* MethylDcmAlphabet::_recognition_sites[] = { "CCAGG", "CCTGG" };
 const char* MethylDcmAlphabet::_recognition_sites_methylated[] = { "CMAGG", "CMTGG" };
 const char* MethylDcmAlphabet::_recognition_sites_methylated_complement[] = { "GGTMC", "GGAMC" };
 
+//
+// T-mods - uracil or mod T substitution
+// Added by Timp 17/08/16
+//
+const uint8_t ModTAlphabet::_rank[256] = {
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,1,0,0,0,2,0,0,0,0,0,3,0,0,
+    0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+};
+
+const char* ModTAlphabet::_name = "tmod";
+const char* ModTAlphabet::_base = "ACGMT";
+const char* ModTAlphabet::_complement = "TGCAA";
+const uint32_t ModTAlphabet::_size = 5;
+
+const uint32_t ModTAlphabet::_num_recognition_sites = 1;
+const uint32_t ModTAlphabet::_recognition_length = 1;
+const char* ModTAlphabet::_recognition_sites[] = { "T" };
+const char* ModTAlphabet::_recognition_sites_methylated[] = { "M" };
+const char* ModTAlphabet::_recognition_sites_methylated_complement[] = { "A" };
+
+
+
 // Global objects
 DNAAlphabet gDNAAlphabet;
 MethylCpGAlphabet gMCpGAlphabet;
 MethylDamAlphabet gMethylDamAlphabet;
 MethylDcmAlphabet gMethylDcmAlphabet;
+ModTAlphabet gModTAlphabet;
 
 std::vector<const Alphabet*> get_alphabet_list()
 {
     std::vector<const Alphabet*> list = { &gDNAAlphabet, 
                                           &gMCpGAlphabet, 
                                           &gMethylDamAlphabet,
-                                          &gMethylDcmAlphabet };
+                                          &gMethylDcmAlphabet,
+					  &gModTAlphabet};
     return list;
 }
 

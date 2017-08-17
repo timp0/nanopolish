@@ -355,11 +355,34 @@ struct MethylDcmAlphabet : public Alphabet
     }
 };
 
+//
+// modT alphabet added by Timp 17/08/16
+// 
+struct ModTAlphabet : public Alphabet
+{
+    // member variables, expanded by macrocs
+    BASIC_MEMBER_BOILERPLATE
+    METHYLATION_MEMBER_BOILERPLATE
+    
+    // member functions
+    BASIC_ACCESSOR_BOILERPLATE
+    METHYLATION_ACCESSOR_BOILERPLATE
+
+    // does this alphabet contain all of the nucleotides in bases?
+    virtual inline bool contains_all(const char *bases) const 
+    {
+        return strspn(bases, _base) == strlen(bases);
+    }
+};
+
+
+
 // Global alphabet objects that can be re-used
 extern DNAAlphabet gDNAAlphabet;
 extern MethylCpGAlphabet gMCpGAlphabet;
 extern MethylDamAlphabet gMethylDamAlphabet;
 extern MethylDcmAlphabet gMethylDcmAlphabet;
+extern ModTAlphabet gModTAlphabet;
 
 const Alphabet* best_alphabet(const char *bases);
 const Alphabet* get_alphabet_by_name(const std::string& name);
