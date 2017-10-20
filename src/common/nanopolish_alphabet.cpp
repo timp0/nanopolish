@@ -210,7 +210,7 @@ std::vector<const Alphabet*> get_alphabet_list()
                                           &gMCpGAlphabet, 
                                           &gMethylDamAlphabet,
                                           &gMethylDcmAlphabet,
-					  &gModTAlphabet};
+					  &gModTAlphabet,
                                           &gUtoTRNAAlphabet };
     return list;
 }
