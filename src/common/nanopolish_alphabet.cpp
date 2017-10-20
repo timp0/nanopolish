@@ -12,7 +12,6 @@
 //
 // DNAAlphabet
 // 
-
 const uint8_t DNAAlphabet::_rank[256] = {
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -35,6 +34,32 @@ const char* DNAAlphabet::_name = "nucleotide";
 const char* DNAAlphabet::_base = "ACGT";
 const char* DNAAlphabet::_complement = "TGCA";
 const uint32_t DNAAlphabet::_size = 4;
+
+//
+// UtoTRNAAlphabet
+// 
+const uint8_t UtoTRNAAlphabet::_rank[256] = {
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,1,0,0,0,2,0,0,0,0,0,0,0,0,
+    0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+};
+const char* UtoTRNAAlphabet::_name = "u_to_t_rna";
+const char* UtoTRNAAlphabet::_base = "ACGT";
+const char* UtoTRNAAlphabet::_complement = "TGCA";
+const uint32_t UtoTRNAAlphabet::_size = 4;
 
 //
 // methyl-cytosine in CG context
@@ -177,6 +202,7 @@ MethylCpGAlphabet gMCpGAlphabet;
 MethylDamAlphabet gMethylDamAlphabet;
 MethylDcmAlphabet gMethylDcmAlphabet;
 ModTAlphabet gModTAlphabet;
+UtoTRNAAlphabet gUtoTRNAAlphabet;
 
 std::vector<const Alphabet*> get_alphabet_list()
 {
@@ -185,6 +211,7 @@ std::vector<const Alphabet*> get_alphabet_list()
                                           &gMethylDamAlphabet,
                                           &gMethylDcmAlphabet,
 					  &gModTAlphabet};
+                                          &gUtoTRNAAlphabet };
     return list;
 }
 

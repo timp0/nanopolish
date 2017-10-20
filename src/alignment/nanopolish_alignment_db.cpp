@@ -39,7 +39,14 @@ SequenceAlignmentRecord::SequenceAlignmentRecord(const bam1_t* record)
     }
     
     // copy read base-to-reference alignment
-    this->aligned_bases = get_aligned_pairs(record);
+    std::vector<AlignedSegment> alignments = get_aligned_segments(record);
+    if(alignments.size() > 1) {
+        fprintf(stderr, "Error: spliced alignments detected when loading read %s\n", this->read_name.c_str());
+        fprintf(stderr, "Please align the reads to the genome using a non-spliced aligner\n");
+        exit(EXIT_FAILURE);
+    }
+    assert(!alignments.empty());
+    this->aligned_bases = alignments[0];
 }
 
 //
@@ -85,9 +92,9 @@ AlignmentDB::AlignmentDB(const std::string& reads_file,
                             m_reference_file(reference_file),
                             m_sequence_bam(sequence_bam),
                             m_event_bam(event_bam),
-                            m_fast5_name_map(reads_file),
                             m_calibrate_on_load(calibrate_reads)
 {
+    m_read_db.load(reads_file);
     _clear_region();
 }
 
@@ -250,6 +257,9 @@ std::vector<Variant> AlignmentDB::get_variants_in_region(const std::string& cont
 {
     std::vector<Variant> variants;
     std::map<std::string, std::pair<Variant, int>> map;
+    assert(stop_position >= start_position);
+    const int MIN_DISTANCE_TO_REGION_END = 1;
+
     std::vector<int> depth(stop_position - start_position + 1, 0);
 
     for(size_t i = 0; i < m_sequence_records.size(); ++i) {
@@ -309,7 +319,9 @@ std::vector<Variant> AlignmentDB::get_variants_in_region(const std::string& cont
                 }
             }
 
-            if(next_iter != stop_iter && (is_mismatch || is_gap)) {
+            // Make sure this is a variant, that it did not go off the end of the reference and that
+            // it is not too close to the end of the region
+            if(next_iter != stop_iter && (is_mismatch || is_gap) && next_iter->ref_pos < stop_position - MIN_DISTANCE_TO_REGION_END) {
                 Variant v;
                 v.ref_name = contig;
                 v.ref_position = start_iter->ref_pos;
@@ -357,7 +369,13 @@ void AlignmentDB::load_region(const std::string& contig,
     // Adjust end position to make sure we don't go out-of-range
     m_region_contig = contig;
     m_region_start = start_position;
-    m_region_end = std::min(stop_position, faidx_seq_len(fai, contig.c_str()));
+    int contig_length = faidx_seq_len(fai, contig.c_str());
+    if(contig_length == -1) {
+        fprintf(stderr, "Error: could not retrieve length of contig %s from the faidx.\n", contig.c_str());
+        exit(EXIT_FAILURE);
+    }
+
+    m_region_end = std::min(stop_position, contig_length);
     
     assert(!m_region_contig.empty());
     assert(m_region_start >= 0);
@@ -424,9 +442,7 @@ BamHandles _initialize_bam_itr(const std::string& bam_filename,
     // load bam index file
     hts_idx_t* bam_idx = sam_index_load(handles.bam_fh, bam_filename.c_str());
     if(bam_idx == NULL) {
-        fprintf(stderr, "Error: could not load the .bai index file for %s\n", bam_filename.c_str());
-        fprintf(stderr, "Please run 'samtools index %s' before nanopolish\n", bam_filename.c_str());
-        exit(EXIT_FAILURE);
+        bam_index_error_exit(bam_filename);
     }
 
     // read the bam header to get the contig ID
@@ -502,7 +518,9 @@ std::vector<EventAlignmentRecord> AlignmentDB::_load_events_by_region_from_bam(c
         int event_stride = bam_aux2i(bam_aux_get(handles.bam_record, "ES"));
 
         // copy event alignments
-        event_record.aligned_events = get_aligned_pairs(handles.bam_record, event_stride);
+        std::vector<AlignedSegment> alignments = get_aligned_segments(handles.bam_record, event_stride);
+        assert(alignments.size() > 0);
+        event_record.aligned_events = alignments[0];
 
         event_record.rc = bam_is_rev(handles.bam_record);
         event_record.stride = event_stride;
@@ -603,8 +621,7 @@ void AlignmentDB::_load_squiggle_read(const std::string& read_name)
 {
     // Do we need to load this fast5 file?
     if(m_squiggle_read_map.find(read_name) == m_squiggle_read_map.end()) {
-        std::string fast5_path = m_fast5_name_map.get_path(read_name);
-        SquiggleRead* sr = new SquiggleRead(read_name, fast5_path);
+        SquiggleRead* sr = new SquiggleRead(read_name, m_read_db);
         m_squiggle_read_map[read_name] = sr;
     }
 }

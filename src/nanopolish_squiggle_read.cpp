@@ -12,6 +12,13 @@
 #include "nanopolish_pore_model_set.h"
 #include "nanopolish_methyltrain.h"
 #include "nanopolish_extract.h"
+#include "nanopolish_raw_loader.h"
+
+extern "C" {
+#include "event_detection.h"
+#include "scrappie_common.h"
+}
+
 #include <fast5.hpp>
 
 //#define DEBUG_MODEL_SELECTION 1
@@ -23,28 +30,56 @@ int g_total_reads = 0;
 int g_unparseable_reads = 0;
 int g_qc_fail_reads = 0;
 int g_failed_calibration_reads = 0;
+int g_failed_alignment_reads = 0;
+
+const double MIN_CALIBRATION_VAR = 2.5;
 
 //
-SquiggleRead::SquiggleRead(const std::string& name, const std::string& path, const uint32_t flags) :
+SquiggleRead::SquiggleRead(const std::string& name, const ReadDB& read_db, const uint32_t flags) :
     read_name(name),
+    nucleotide_type(SRNT_DNA),
     pore_type(PT_UNKNOWN),
-    fast5_path(path),
     drift_correction_performed(false),
     f_p(nullptr)
 {
-    events_per_base[0] = events_per_base[1] = 0.0f;
+    this->events_per_base[0] = events_per_base[1] = 0.0f;
+    this->fast5_path = read_db.get_signal_path(this->read_name);
+
 
     #pragma omp critical(sr_load_fast5)
     {
-        load_from_fast5(flags);
-    }
+        this->f_p = new fast5::File(fast5_path);
+        assert(this->f_p->is_open());
 
-    // perform drift correction and other scalings
-    transform();
+        // Try to detect whether this read is DNA or RNA
+        this->nucleotide_type = SRNT_DNA;
+        if(this->f_p->have_context_tags_params()) {
+            fast5::Context_Tags_Params context_tags = this->f_p->get_context_tags_params();
+            std::string experiment_type = context_tags["experiment_type"];
+            if(experiment_type == "rna") {
+                this->nucleotide_type = SRNT_RNA;
+            }
+        }
+
+        bool is_event_read = is_extract_read_name(this->read_name);
+        if(this->nucleotide_type == SRNT_DNA && is_event_read) {
+            load_from_events(flags);
+        } else {
+            this->read_sequence = read_db.get_read_sequence(read_name);
+            load_from_raw(flags);
+        }
+
+        // perform drift correction and other scalings
+        transform();
+
+        delete this->f_p;
+        this->f_p = nullptr;
+    }
 }
 
 SquiggleRead::~SquiggleRead()
 {
+
 }
 
 // helper for get_closest_event_to
@@ -95,9 +130,10 @@ void SquiggleRead::transform()
 }
 
 //
-void SquiggleRead::load_from_fast5(const uint32_t flags)
+void SquiggleRead::load_from_events(const uint32_t flags)
 {
-    f_p = new fast5::File(fast5_path);
+    assert(this->nucleotide_type != SRNT_RNA);
+
     assert(f_p->is_open());
     detect_pore_type();
     detect_basecall_group();
@@ -135,7 +171,6 @@ void SquiggleRead::load_from_fast5(const uint32_t flags)
             assert(f5_event.p_model_state >= 0.0 && f5_event.p_model_state <= 1.0);
             p_model_states.push_back(f5_event.p_model_state);
         }
-
 
         // we need the 1D event map and sequence to calculate calibration parameters
         // these will be copied into the member fields later if this is a 1D read,
@@ -199,9 +234,193 @@ void SquiggleRead::load_from_fast5(const uint32_t flags)
         events[0].clear();
         events[1].clear();
     }
+}
 
-    delete f_p;
-    f_p = nullptr;
+//
+void SquiggleRead::load_from_raw(const uint32_t flags)
+{
+    // File not in db, can't load
+    if(this->fast5_path == "" || this->read_sequence == "") {
+        return;
+    }
+
+    // Hardcoded parameters, for now we can only do template with the main R9.4 model
+    size_t strand_idx = 0;
+    std::string kit = "r9.4_450bps";
+    std::string alphabet = "nucleotide";
+    std::string strand_str = "template";
+    size_t k = 6;
+    const detector_param* ed_params = &event_detection_defaults;
+
+    if(this->nucleotide_type == SRNT_RNA) {
+        kit = "r9.4_70bps";
+        alphabet = "u_to_t_rna";
+        k = 5;
+        ed_params = &event_detection_rna;
+
+        std::replace(this->read_sequence.begin(), this->read_sequence.end(), 'U', 'T');
+    }
+
+    this->read_type = SRT_TEMPLATE;
+    this->pore_type = PT_R9;
+
+    // Ensure signal file is available for read
+    assert(f_p->is_open());
+
+    // Read the sample rate
+    auto channel_params = f_p->get_channel_id_params();
+    this->sample_rate = channel_params.sampling_rate;
+
+    // Read the actual samples
+    auto& sample_read_names = f_p->get_raw_samples_read_name_list();
+    if(sample_read_names.empty()) {
+        fprintf(stderr, "Error, no raw samples found\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // we assume the first raw sample read is the one we're after
+    std::string sample_read_name = sample_read_names.front();
+    std::vector<float> samples = f_p->get_raw_samples(sample_read_name);
+
+    // convert samples to scrappie's format (for event detection)
+    raw_table rt;
+    rt.n = samples.size();
+    rt.start = 0;
+    rt.end = samples.size() - 1;
+    rt.raw = (float*)malloc(sizeof(float) * samples.size());
+    for(size_t i = 0; i < samples.size(); ++i) {
+        rt.raw[i] = samples[i];
+    }
+
+    // trim using scrappie's internal method
+    // parameters taken directly from scrappie defaults
+    int trim_start = 200;
+    int trim_end = 10;
+    int varseg_chunk = 100;
+    float varseg_thresh = 0.0;
+    trim_and_segment_raw(rt, trim_start, trim_end, varseg_chunk, varseg_thresh);
+    event_table et = detect_events(rt, *ed_params);
+    assert(rt.n > 0);
+    assert(et.n > 0);
+
+    // Load pore model and scale to events using method-of-moments
+    this->pore_model[strand_idx] = PoreModelSet::get_model(kit,
+                                                           alphabet,
+                                                           strand_str,
+                                                           k);
+    double shift, scale;
+    estimate_scalings_using_mom(this->read_sequence,
+                                this->pore_model[strand_idx],
+                                et,
+                                shift,
+                                scale);
+
+    // apply parameters to pore model
+    this->pore_model[strand_idx].shift = shift;
+    this->pore_model[strand_idx].scale = scale;
+    this->pore_model[strand_idx].drift = 0.0f;
+    this->pore_model[strand_idx].var = 1.0f;
+    transform();
+    this->pore_model[strand_idx].bake_gaussian_parameters();
+
+    // copy events into nanopolish's format
+    this->events[strand_idx].resize(et.n);
+    double start_time = 0;
+    for(size_t i = 0; i < et.n; ++i) {
+        float length_in_seconds = et.event[i].length / this->sample_rate;
+        this->events[strand_idx][i] = { et.event[i].mean, et.event[i].stdv, start_time, length_in_seconds, logf(et.event[i].stdv) };
+        start_time += length_in_seconds;
+    }
+
+    // If sequencing RNA, reverse the events to be 3'->5'
+    if(this->nucleotide_type == SRNT_RNA) {
+        std::reverse(this->events[strand_idx].begin(), this->events[strand_idx].end());
+    }
+
+    // clean up scrappie raw and event tables
+    assert(rt.raw != NULL);
+    assert(et.event != NULL);
+    free(rt.raw);
+    free(et.event);
+
+    // align events to the basecalled read
+    std::vector<AlignedPair> event_alignment = adaptive_banded_simple_event_align(*this, read_sequence);
+
+    // transform alignment into the base-to-event map
+    if(event_alignment.size() > 0) {
+
+        // create base-to-event map
+        size_t n_kmers = read_sequence.size() - k + 1;
+        this->base_to_event_map.clear();
+        this->base_to_event_map.resize(n_kmers);
+
+        size_t max_event = 0;
+        size_t min_event = std::numeric_limits<size_t>::max();
+
+        size_t prev_event_idx = -1;
+        for(size_t i = 0; i < event_alignment.size(); ++i) {
+
+            size_t k_idx = event_alignment[i].ref_pos;
+            size_t event_idx = event_alignment[i].read_pos;
+            IndexPair& elem = this->base_to_event_map[k_idx].indices[strand_idx];
+            if(event_idx != prev_event_idx) {
+                if(elem.start == -1) {
+                    elem.start = event_idx;
+                }
+                elem.stop = event_idx;
+            }
+
+            max_event = std::max(max_event, event_idx);
+            min_event = std::min(min_event, event_idx);
+            prev_event_idx = event_idx;
+        }
+
+        events_per_base[strand_idx] = (double)(max_event - min_event) / n_kmers;
+
+        // prepare data structures for the final calibration
+        std::vector<EventAlignment> alignment =
+            get_eventalignment_for_1d_basecalls(read_sequence, this->base_to_event_map, k, strand_idx, 0);
+
+        // reset default scaling parameters
+        this->pore_model[strand_idx].shift = 0.0;
+        this->pore_model[strand_idx].scale = 1.0;
+        this->pore_model[strand_idx].drift = 0.0;
+        this->pore_model[strand_idx].var = 1.0;
+        this->pore_model[strand_idx].scale_sd = 1.0;
+        this->pore_model[strand_idx].var_sd = 1.0;
+        this->pore_model[strand_idx].bake_gaussian_parameters();
+
+        // run recalibration to get the best set of scaling parameters and the residual
+        // between the (scaled) event levels and the model.
+        // internally this function will set shift/scale/etc of the pore model
+        bool calibrated = recalibrate_model(*this, strand_idx, alignment, this->pore_model[strand_idx].pmalphabet, true, false);
+
+#ifdef DEBUG_MODEL_SELECTION
+        fprintf(stderr, "[calibration] read: %s"
+                         "scale: %.2lf shift: %.2lf drift: %.5lf var: %.2lf\n",
+                                read_name.substr(0, 6).c_str(), pore_model[strand_idx].scale,
+                                pore_model[strand_idx].shift, pore_model[strand_idx].drift, pore_model[strand_idx].var);
+#endif
+
+        // QC calibration
+        if(!calibrated || this->pore_model[strand_idx].var > MIN_CALIBRATION_VAR) {
+            events[strand_idx].clear();
+            g_failed_calibration_reads += 1;
+        }
+    } else {
+        // Could not align, fail this read
+        this->events[strand_idx].clear();
+        this->events_per_base[strand_idx] = 0.0f;
+        g_failed_alignment_reads += 1;
+    }
+    g_total_reads += 1;
+
+    // Filter poor quality reads that have too many "stays"
+    if(!this->events[strand_idx].empty() && this->events_per_base[strand_idx] > 5.0) {
+        g_qc_fail_reads += 1;
+        events[0].clear();
+        events[1].clear();
+    }
 }
 
 void SquiggleRead::_load_R7(uint32_t si)
@@ -270,7 +489,8 @@ void SquiggleRead::_load_R9(uint32_t si,
         }
 
         if(mt == "") {
-            fprintf(stderr, "Error: The basecalling model could not be detected from the fast5 file. Please re-run basecalling using albacore.\n");
+            fprintf(stderr, "Error: The basecalling model could not be detected from the fast5 file: %s\n", this->fast5_path.c_str());
+            fprintf(stderr, "Error: Please re-run basecalling using albacore.\n");
             exit(1);
         }
 
@@ -404,7 +624,7 @@ void SquiggleRead::_load_R9(uint32_t si,
 #endif
         }
 
-        if(best_model_var < 2.5) {
+        if(best_model_var < MIN_CALIBRATION_VAR) {
 #ifdef DEBUG_MODEL_SELECTION
             fprintf(stderr, "[calibration] selected model with var %.4lf\n", best_model_var);
 #endif
@@ -777,7 +997,7 @@ hack:
         {
             read_kidx += 1;
         }
-        
+ 
         // In the most recent version of metrichor occasionally
         // a kmer will be present in the alignment table
         // that is not in the 2D read. This awful hack
@@ -974,6 +1194,15 @@ bool SquiggleRead::check_basecall_group() const
     if ((read_type == SRT_2D or read_type == SRT_COMPLEMENT)
         and not f_p->have_basecall_events(1, basecall_group)) return false;
     return true;
+}
+
+//
+bool SquiggleRead::is_extract_read_name(std::string& name) const
+{
+    // albacore read names are uuids with hex characters separated
+    // by underscores. If the read name contains three colon-delimited fields
+    // we infer it is output by nanopolish extract. 
+    return std::count(name.begin(), name.end(), ':') == 2;
 }
 
 void SquiggleRead::detect_basecall_group()

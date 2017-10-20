@@ -9,9 +9,9 @@
 #include <map>
 #include <functional>
 #include "logsum.h"
+#include "nanopolish_index.h"
 #include "nanopolish_extract.h"
 #include "nanopolish_call_variants.h"
-#include "nanopolish_consensus.h"
 #include "nanopolish_eventalign.h"
 #include "nanopolish_getmodel.h"
 #include "nanopolish_methyltrain.h"
@@ -27,16 +27,15 @@ static std::map< std::string, std::function<int(int, char**)> > programs = {
     {"help",        print_usage},
     {"--help",      print_usage},
     {"--version",   print_version},
+    {"index",       index_main},
     {"extract",     extract_main},
-    {"consensus",   consensus_main},
     {"eventalign",  eventalign_main},
     {"getmodel",    getmodel_main},
     {"variants",    call_variants_main},
     {"methyltrain", methyltrain_main},
     {"scorereads",  scorereads_main} ,
     {"phase-reads",  phase_reads_main} ,
-    {"call-methylation",  call_methylation_main},
-    {"train-poremodel-from-basecalls",  train_poremodel_from_basecalls_main}
+    {"call-methylation",  call_methylation_main}
 };
 
 int print_usage(int, char **)
@@ -82,8 +81,10 @@ int main(int argc, char** argv)
     extern int g_unparseable_reads;
     extern int g_qc_fail_reads;
     extern int g_failed_calibration_reads;
+    extern int g_failed_alignment_reads;
     if(g_total_reads > 0) {
-        fprintf(stderr, "[post-run summary] total reads: %d unparseable: %d qc fail: %d could not calibrate: %d\n", g_total_reads, g_unparseable_reads, g_qc_fail_reads, g_failed_calibration_reads);
+        fprintf(stderr, "[post-run summary] total reads: %d unparseable: %d qc fail: %d could not calibrate: %d no alignment: %d\n", 
+            g_total_reads, g_unparseable_reads, g_qc_fail_reads, g_failed_calibration_reads, g_failed_alignment_reads);
     }
     return ret;
 }

@@ -30,7 +30,6 @@
 #include "nanopolish_profile_hmm.h"
 #include "nanopolish_alignment_db.h"
 #include "nanopolish_anchor.h"
-#include "nanopolish_fast5_map.h"
 #include "nanopolish_variant.h"
 #include "nanopolish_haplotype.h"
 #include "nanopolish_pore_model_set.h"
@@ -84,6 +83,8 @@ static const char *CONSENSUS_USAGE_MESSAGE =
 "  -b, --bam=FILE                       the reads aligned to the reference genome are in bam FILE\n"
 "  -e, --event-bam=FILE                 the events aligned to the reference genome are in bam FILE\n"
 "  -g, --genome=FILE                    the reference genome is in FILE\n"
+"  -p, --ploidy=NUM                     the ploidy level of the sequenced genome\n"
+"      --genotype=FILE                  call genotypes for the variants in the vcf FILE\n"
 "  -o, --outfile=FILE                   write result to FILE [default: stdout]\n"
 "  -t, --threads=NUM                    use NUM threads (default: 1)\n"
 "  -m, --min-candidate-frequency=F      extract candidate variants from the aligned reads when the variant frequency is at least F (default 0.2)\n"
@@ -419,7 +420,7 @@ void print_debug_stats(const std::string& contig,
         const HMMInputData& data = event_sequences[i];
 
         // summarize score
-        double num_events = abs(data.event_start_idx - data.event_stop_idx) + 1;
+        double num_events = abs((int)data.event_start_idx - (int)data.event_stop_idx) + 1;
         double base_score = profile_hmm_score(base_haplotype.get_sequence(), data, alignment_flags);
         double called_score = profile_hmm_score(called_haplotype.get_sequence(), data, alignment_flags);
         double base_avg = base_score / num_events;
@@ -578,7 +579,7 @@ Haplotype fix_homopolymers(const Haplotype& input_haplotype,
             size_t strand = event_sequences[j].strand;
 
             // skip small event regions
-            if( abs(event_sequences[j].event_start_idx - event_sequences[j].event_stop_idx) < 10) {
+            if( abs((int)event_sequences[j].event_start_idx - (int)event_sequences[j].event_stop_idx) < 10) {
                 continue;
             }
 
@@ -808,6 +809,11 @@ Haplotype call_haplotype_from_candidates(const AlignmentDB& alignments,
         for(size_t gi = 0; gi < variant_db.get_num_groups(); ++gi) {
 
             std::vector<Variant> called_variants = simple_call(variant_db.get_group(gi), opt::ploidy, opt::genotype_only);
+
+            // annotate each SNP variant with support fractions for the alternative bases
+            if(opt::calculate_all_support) {
+                annotate_variants_with_all_support(called_variants, alignments, opt::min_flanking_sequence, alignment_flags);
+            }
 
             // Apply them to the final haplotype
             for(size_t vi = 0; vi < called_variants.size(); vi++) {
@@ -1055,17 +1061,27 @@ int call_variants_main(int argc, char** argv)
     std::string contig;
     int start_base;
     int end_base;
+    int contig_length = -1;
 
     // If a window has been specified, only call variants/polish in that range
     if(!opt::window.empty()) {
         // Parse the window string
         parse_region_string(opt::window, contig, start_base, end_base);
-        end_base = std::min(end_base, get_contig_length(contig) - 1);
+        contig_length = get_contig_length(contig);
+        end_base = std::min(end_base, contig_length - 1);
     } else {
         // otherwise, run on the whole genome
         contig = get_single_contig_or_fail();
+        contig_length = get_contig_length(contig);
         start_base = 0;
-        end_base = get_contig_length(contig) - 1;
+        end_base = contig_length - 1;
+    }
+
+    int MIN_DISTANCE_TO_END = 40;
+    if(contig_length - start_base < MIN_DISTANCE_TO_END) {
+        fprintf(stderr, "Invalid polishing window: [%d %d] - please adjust -w parameter.\n", start_base, end_base);
+        fprintf(stderr, "The starting coordinate of the polishing window must be at least %dbp from the contig end\n", MIN_DISTANCE_TO_END);
+        exit(EXIT_FAILURE);
     }
 
     FILE* out_fp;
@@ -1098,6 +1114,13 @@ int call_variants_main(int argc, char** argv)
     tag_fields.push_back(
             Variant::make_vcf_tag_string("INFO", "AlleleCount", 1, "Integer",
                 "The inferred number of copies of the allele"));
+
+    if(opt::calculate_all_support) {
+        tag_fields.push_back(
+                Variant::make_vcf_tag_string("INFO", "SupportFractionByBase", 4, "Integer",
+                    "The fraction of reads supporting A,C,G,T at this position"));
+
+    }
     tag_fields.push_back(
             Variant::make_vcf_tag_string("FORMAT", "GT", 1, "String",
                 "Genotype"));
