@@ -160,6 +160,42 @@ const char* MethylDcmAlphabet::_recognition_sites[] = { "CCAGG", "CCTGG" };
 const char* MethylDcmAlphabet::_recognition_sites_methylated[] = { "CMAGG", "CMTGG" };
 const char* MethylDcmAlphabet::_recognition_sites_methylated_complement[] = { "GGTMC", "GGAMC" };
 
+
+//
+// Added by Timp 17/10/20
+// sin395 methylation: methyl-cytosine in GATC context
+//
+const uint8_t MethylSin395Alphabet::_rank[256] = {
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,1,0,0,0,2,0,0,0,0,0,3,0,0,
+    0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+};
+
+const char* MethylSin395Alphabet::_name = "sin395";
+const char* MethylSin395Alphabet::_base = "ACGMT";
+const char* MethylSin395Alphabet::_complement = "TGCGA";
+const uint32_t MethylSin395Alphabet::_size = 5;
+
+const uint32_t MethylSin395Alphabet::_num_recognition_sites = 2;
+const uint32_t MethylSin395Alphabet::_recognition_length = 4;
+const char* MethylSin395Alphabet::_recognition_sites[] = { "GATC" };
+const char* MethylSin395Alphabet::_recognition_sites_methylated[] = { "GATM" };
+const char* MethylSin395Alphabet::_recognition_sites_methylated_complement[] = { "CTAG" };
+
+
 //
 // T-mods - uracil or mod T substitution
 // Added by Timp 17/08/16
@@ -201,6 +237,7 @@ DNAAlphabet gDNAAlphabet;
 MethylCpGAlphabet gMCpGAlphabet;
 MethylDamAlphabet gMethylDamAlphabet;
 MethylDcmAlphabet gMethylDcmAlphabet;
+MethylSin395Alphabet gMethylSin395Alphabet;
 ModTAlphabet gModTAlphabet;
 UtoTRNAAlphabet gUtoTRNAAlphabet;
 
@@ -210,6 +247,7 @@ std::vector<const Alphabet*> get_alphabet_list()
                                           &gMCpGAlphabet, 
                                           &gMethylDamAlphabet,
                                           &gMethylDcmAlphabet,
+					  &gMethylSin395Alphabet,
 					  &gModTAlphabet,
                                           &gUtoTRNAAlphabet };
     return list;
