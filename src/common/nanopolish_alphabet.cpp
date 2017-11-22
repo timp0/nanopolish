@@ -189,11 +189,47 @@ const char* MethylSin395Alphabet::_base = "ACGMT";
 const char* MethylSin395Alphabet::_complement = "TGCGA";
 const uint32_t MethylSin395Alphabet::_size = 5;
 
-const uint32_t MethylSin395Alphabet::_num_recognition_sites = 2;
+const uint32_t MethylSin395Alphabet::_num_recognition_sites = 1;
 const uint32_t MethylSin395Alphabet::_recognition_length = 4;
 const char* MethylSin395Alphabet::_recognition_sites[] = { "GATC" };
 const char* MethylSin395Alphabet::_recognition_sites_methylated[] = { "GATM" };
 const char* MethylSin395Alphabet::_recognition_sites_methylated_complement[] = { "CTAG" };
+
+
+//
+// Added by Timp 17/10/25
+// pspjdri methylation: 4-methylcytosine in CCGG context
+//
+const uint8_t MethylpspjdriAlphabet::_rank[256] = {
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,1,0,0,0,2,0,0,0,0,0,3,0,0,
+    0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+};
+
+const char* MethylpspjdriAlphabet::_name = "pspjdri";
+const char* MethylpspjdriAlphabet::_base = "ACGMT";
+const char* MethylpspjdriAlphabet::_complement = "TGCGA";
+const uint32_t MethylpspjdriAlphabet::_size = 5;
+
+const uint32_t MethylpspjdriAlphabet::_num_recognition_sites = 1;
+const uint32_t MethylpspjdriAlphabet::_recognition_length = 4;
+const char* MethylpspjdriAlphabet::_recognition_sites[] = { "CCGG" };
+const char* MethylpspjdriAlphabet::_recognition_sites_methylated[] = { "MCGG" };
+const char* MethylpspjdriAlphabet::_recognition_sites_methylated_complement[] = { "GGCC" };
+
 
 
 //
@@ -238,6 +274,7 @@ MethylCpGAlphabet gMCpGAlphabet;
 MethylDamAlphabet gMethylDamAlphabet;
 MethylDcmAlphabet gMethylDcmAlphabet;
 MethylSin395Alphabet gMethylSin395Alphabet;
+MethylpspjdriAlphabet gMethylpspjdriAlphabet;
 ModTAlphabet gModTAlphabet;
 UtoTRNAAlphabet gUtoTRNAAlphabet;
 
@@ -248,6 +285,7 @@ std::vector<const Alphabet*> get_alphabet_list()
                                           &gMethylDamAlphabet,
                                           &gMethylDcmAlphabet,
 					  &gMethylSin395Alphabet,
+					  &gMethylpspjdriAlphabet,
 					  &gModTAlphabet,
                                           &gUtoTRNAAlphabet };
     return list;
