@@ -404,6 +404,90 @@ struct MethylSin395Alphabet : public Alphabet
 };
 
 
+//
+// fnu4h alphabet (GCNGC 5-mC) added by yfan 17/11/22
+//
+struct Methylfnu4hAlphabet : public Alphabet
+{
+  // member variables, expanded by macrocs
+      BASIC_MEMBER_BOILERPLATE
+	    METHYLATION_MEMBER_BOILERPLATE
+
+	// member functions
+	    BASIC_ACCESSOR_BOILERPLATE
+	    METHYLATION_ACCESSOR_BOILERPLATE
+
+	// does this alphabet contain all of the nucleotides in bases?
+	virtual inline bool contains_all(const char *bases) const
+      {
+	return strspn(bases, _base) == strlen(bases);
+      }
+};
+
+
+//
+// sdeaII alphabet (CCNGGC 5-mC) added by yfan 17/11/22
+//
+struct MethylsdeaIIAlphabet : public Alphabet
+{
+  // member variables, expanded by macrocs
+        BASIC_MEMBER_BOILERPLATE
+	              METHYLATION_MEMBER_BOILERPLATE
+
+	  // member functions
+	              BASIC_ACCESSOR_BOILERPLATE
+	              METHYLATION_ACCESSOR_BOILERPLATE
+
+	  // does this alphabet contain all of the nucleotides in bases?
+	  virtual inline bool contains_all(const char *bases) const
+	{
+	  return strspn(bases, _base) == strlen(bases);
+	}
+};
+
+
+//
+// hinfI alphabet (GANTC 6-mA) added by yfan 17/11/22
+//
+struct MethylhinfIAlphabet : public Alphabet
+{
+  // member variables, expanded by macrocs
+        BASIC_MEMBER_BOILERPLATE
+	              METHYLATION_MEMBER_BOILERPLATE
+
+	  // member functions
+	              BASIC_ACCESSOR_BOILERPLATE
+	              METHYLATION_ACCESSOR_BOILERPLATE
+
+	  // does this alphabet contain all of the nucleotides in bases?
+	  virtual inline bool contains_all(const char *bases) const
+	{
+	  return strspn(bases, _base) == strlen(bases);
+	}
+};
+
+
+//
+// pspjdri alphabet (CCGG 4-mC) added by yfan 17/11/22
+//
+struct MethylpspjdriAlphabet : public Alphabet
+{
+  // member variables, expanded by macrocs
+        BASIC_MEMBER_BOILERPLATE
+	              METHYLATION_MEMBER_BOILERPLATE
+
+	  // member functions
+	              BASIC_ACCESSOR_BOILERPLATE
+	              METHYLATION_ACCESSOR_BOILERPLATE
+
+	  // does this alphabet contain all of the nucleotides in bases?
+	  virtual inline bool contains_all(const char *bases) const
+	{
+	  return strspn(bases, _base) == strlen(bases);
+	}
+};
+
+
 
 //
 // modT alphabet added by Timp 17/08/16
