@@ -199,10 +199,11 @@ void calculate_methylation_for_read(const OutputHandles& handles,
         ref_seq = gDNAAlphabet.disambiguate(ref_seq);
 
         // Scan the sequence for CpGs
+	// Timp edit 11/30/17 - change to 4mC motif detection - CCGG
         std::vector<int> cpg_sites;
         assert(ref_seq.size() != 0);
-        for(size_t i = 0; i < ref_seq.size() - 1; ++i) {
-            if(ref_seq[i] == 'C' && ref_seq[i+1] == 'G') {
+        for(size_t i = 0; i < ref_seq.size() - 3; ++i) {
+	  if(ref_seq[i] == 'C' && ref_seq[i+1] == 'C' && ref_seq[i+2] == 'G' && ref_seq[i+3] == 'G') {
                 cpg_sites.push_back(i);
             }
         }
