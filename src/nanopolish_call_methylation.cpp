@@ -203,7 +203,8 @@ void calculate_methylation_for_read(const OutputHandles& handles,
         std::vector<int> cpg_sites;
         assert(ref_seq.size() != 0);
         for(size_t i = 0; i < ref_seq.size() - 3; ++i) {
-	  if(ref_seq[i] == 'C' && ref_seq[i+1] == 'C' && ref_seq[i+2] == 'G' && ref_seq[i+3] == 'G') {
+	  // if(ref_seq[i] == 'C' && ref_seq[i+1] == 'C' && ref_seq[i+2] == 'G' && ref_seq[i+3] == 'G') {
+	  if(ref_seq[i] == 'C' && ref_seq[i+1] == 'G') {
                 cpg_sites.push_back(i);
             }
         }
