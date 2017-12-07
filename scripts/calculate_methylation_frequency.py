@@ -9,6 +9,10 @@ from collections import namedtuple
 def make_key(c, s, e):
     return c + ":" + str(s) + ":" + str(e)
 
+def split_key(k):
+    f = k.split(":")
+    return (f[0], int(f[1]), int(f[2]))
+
 class SiteStats:
     def __init__(self, g_size, g_seq):
         self.num_reads = 0
@@ -75,9 +79,10 @@ for record in csv_reader:
 # header
 print("\t".join(["chromosome", "start", "end", "num_cpgs_in_group", "called_sites", "called_sites_methylated", "methylated_frequency", "group_sequence"]))
 
-for key in sites:
+sorted_keys = sorted(sites.keys(), key = lambda x: split_key(x))
+
+for key in sorted_keys:
     if sites[key].called_sites > 0:
         (c, s, e) = key.split(":")
         f = float(sites[key].called_sites_methylated) / sites[key].called_sites
-        print("\t".join([str(x) for x in [c, s, e, sites[key].group_size, sites[key].called_sites, sites[key].called_sites_methylated, f, sites[key].sequence]]))
-
+        print("%s\t%s\t%s\t%d\t%d\t%d\t%.3f\t%s" % (c, s, e, sites[key].group_size, sites[key].called_sites, sites[key].called_sites_methylated, f, sites[key].sequence))
