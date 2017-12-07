@@ -339,42 +339,6 @@ const char* MethylpspjdriAlphabet::_recognition_sites_methylated_complement[] = 
 
 
 //
-// Added by Timp 17/10/25
-// pspjdri methylation: 4-methylcytosine in CCGG context
-//
-const uint8_t MethylpspjdriAlphabet::_rank[256] = {
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,1,0,0,0,2,0,0,0,0,0,3,0,0,
-    0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
-};
-
-const char* MethylpspjdriAlphabet::_name = "pspjdri";
-const char* MethylpspjdriAlphabet::_base = "ACGMT";
-const char* MethylpspjdriAlphabet::_complement = "TGCGA";
-const uint32_t MethylpspjdriAlphabet::_size = 5;
-
-const uint32_t MethylpspjdriAlphabet::_num_recognition_sites = 1;
-const uint32_t MethylpspjdriAlphabet::_recognition_length = 4;
-const char* MethylpspjdriAlphabet::_recognition_sites[] = { "CCGG" };
-const char* MethylpspjdriAlphabet::_recognition_sites_methylated[] = { "MCGG" };
-const char* MethylpspjdriAlphabet::_recognition_sites_methylated_complement[] = { "GGCC" };
-
-
-
-//
 // T-mods - uracil or mod T substitution
 // Added by Timp 17/08/16
 //
