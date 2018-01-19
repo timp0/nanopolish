@@ -68,18 +68,16 @@ struct ScoredSite
   double ll_unmethylated[2];
   double ll_methylated[2];
   int strands_scored;
-
+  
   //
   static bool sort_by_position(const ScoredSite& a, const ScoredSite& b) { return a.start_position < b.start_position; }
-
+  
 };
 
-//
-Alphabet* mtest_alphabet = &gMCpGAlphabet;
 
 //
 // Getopt
-//
+//n
 #define SUBPROGRAM "call-methylation"
 
 static const char *CALL_METHYLATION_VERSION_MESSAGE =
@@ -94,8 +92,10 @@ static const char *CALL_METHYLATION_USAGE_MESSAGE =
   "\n"
   "  -v, --verbose                        display verbose output\n"
   "      --version                        display version\n"
-  "      --help                           display this help and exit\n"
+  "      --help                           dispplay this help and exit\n"
   "  -r, --reads=FILE                     the 2D ONT reads are in fasta FILE\n"
+  "  -l, --alphabet                       Options: CpG, Dam, Dcm, Sin395, fnu4h, sdeaII, hinfI, pspjdri,ModT, UtoTRNA \n"  
+  "  -s, --motif=SEQ                      the mod motif\n"
   "  -b, --bam=FILE                       the reads aligned to the genome assembly are in bam FILE\n"
   "  -g, --genome=FILE                    the genome we are computing a consensus for is in FILE\n"
   "  -t, --threads=NUM                    use NUM threads (default: 1)\n"
@@ -107,6 +107,8 @@ namespace opt
   static unsigned int verbose;
   static std::string reads_file;
   static std::string bam_file;
+  static std::string alphabet;
+  static std::string meth_motif;
   static std::string genome_file;
   static std::string models_fofn;
   static std::string region;
@@ -116,7 +118,7 @@ namespace opt
   static int batch_size = 128;
 }
 
-static const char* shortopts = "r:b:g:t:w:m:vn";
+static const char* shortopts = "r:b:s:l:g:t:w:m:vn";
 
 enum { OPT_HELP = 1, OPT_VERSION, OPT_PROGRESS };
 
@@ -124,6 +126,8 @@ static const struct option longopts[] = {
   { "verbose",          no_argument,       NULL, 'v' },
   { "reads",            required_argument, NULL, 'r' },
   { "bam",              required_argument, NULL, 'b' },
+  { "motif",            required_argument, NULL, 's' },
+  { "alphabet",         required_argument, NULL, 'l' }, 
   { "genome",           required_argument, NULL, 'g' },
   { "window",           required_argument, NULL, 'w' },
   { "threads",          required_argument, NULL, 't' },
@@ -198,16 +202,93 @@ void calculate_methylation_for_read(const OutputHandles& handles,
     // Remove non-ACGT bases from this reference segment
     ref_seq = gDNAAlphabet.disambiguate(ref_seq);
 
+    
+    //
+    // yfan edit 1/18/18 - option for different alphabets
+    //
+    if(opt::alphabet == "CpG"){
+      Alphabet* mtest_alphabet = &gMCpGAlphabet;
+    }
+    if(opt::alphabet == "Dam"){
+      Alphabet* mtest_alphabet = &gMethylDamAlphabet;
+    }
+    if(opt::alphabet == "Dcm"){
+      Alphabet* mtest_alphabet = &gMethylDcmAlphabet;
+    }
+    if(opt::alphabet == "Sin395"){
+      Alphabet* mtest_alphabet = &gMethylSin395Alphabet;
+    }
+    if(opt::alphabet == "fnu4h"){
+      Alphabet* mtest_alphabet = &gMethylfnu4hAlphabet;
+    }
+    if(opt::alphabet == "sdeaII"){
+      Alphabet* mtest_alphabet = &gMethylhinfIAlphabet;
+    }
+    if(opt::alphabet == "hinfI"){
+      Alphabet* mtest_alphabet = &gMethylhinfIAlphabet;
+    }
+    if(opt::alphabet == "pspjdri"){
+      Alphabet* mtest_alphabet = &gMethylpspjdriAlphabet;
+    }
+    if(opt::alphabet == "ModT"){
+      Alphabet* mtest_alphabet = &gModTAlphabet;
+    }
+    if(opt::alphabet == "UtoTRNA"){
+      Alphabet* mtest_alphabet = &gUtoTRNAAlphabet;
+    }
+
+
+
     // Scan the sequence for CpGs
     // Timp edit 11/30/17 - change to 4mC motif detection - CCGG
+    // yfan edit 1/18/18 - try to give motif options
     std::vector<int> cpg_sites;
     assert(ref_seq.size() != 0);
-    for(size_t i = 0; i < ref_seq.size() - 3; ++i) {
-      if(ref_seq[i] == 'C' && ref_seq[i+1] == 'C' && ref_seq[i+2] == 'G' && ref_seq[i+3] == 'G') {
-	cpg_sites.push_back(i);
+    if(opt::meth_motif == "CCGG"){
+      for(size_t i = 0; i < ref_seq.size() - 3; ++i) {
+	if(ref_seq[i] == 'C' && ref_seq[i+1] == 'C' && ref_seq[i+2] == 'G' && ref_seq[i+3] == 'G') {
+	  cpg_sites.push_back(i);
+	}
+      }
+    }
+    if(opt::meth_motif == "CG"){
+      for(size_t i = 0; i < ref_seq.size() - 1; ++i) {
+	if(ref_seq[i] == 'C' && ref_seq[i+1] == 'G') {
+	  cpg_sites.push_back(i);
+	}
+      }
+    }
+    if(opt::meth_motif == "GATC"){
+      for(size_t i = 0; i < ref_seq.size() - 3; ++i) {
+	if(ref_seq[i] == 'G' && ref_seq[i+1] == 'A' && ref_seq[i+2] == 'T' && ref_seq[i+3] == 'C') {
+	  cpg_sites.push_back(i);
+	}
+      }
+    }
+    if(opt::meth_motif == "GANTC"){
+      for(size_t i = 0; i < ref_seq.size() - 4; ++i) {
+	if(ref_seq[i] == 'G' && ref_seq[i+1] == 'A' && ref_seq[i+3] == 'T' && ref_seq[i+4] == 'C') {
+	  cpg_sites.push_back(i);
+	}
+      }
+    }
+    if(opt::meth_motif == "GCNGC"){
+      for(size_t i = 0; i < ref_seq.size() - 4; ++i) {
+	if(ref_seq[i] == 'G' && ref_seq[i+1] == 'C' && ref_seq[i+3] == 'G' && ref_seq[i+3] == 'C') {
+	  cpg_sites.push_back(i);
+	}
+      }
+    }
+    if(opt::meth_motif == "CCNGGC"){
+      for(size_t i = 0; i < ref_seq.size() - 5; ++i) {
+	if(ref_seq[i] == 'C' && ref_seq[i+1] == 'C' && ref_seq[i+3] == 'G' && ref_seq[i+3] == 'G' && ref_seq[i+4] == 'C') {
+	  cpg_sites.push_back(i);
+	}
       }
     }
 
+    
+    
     // Batch the CpGs together into groups that are separated by some minimum distance
     int min_separation = 10;
     std::vector<std::pair<int, int>> groups;
@@ -342,6 +423,8 @@ void parse_call_methylation_options(int argc, char** argv)
     case 'r': arg >> opt::reads_file; break;
     case 'g': arg >> opt::genome_file; break;
     case 'b': arg >> opt::bam_file; break;
+    case 's': arg >> opt::meth_motif; break;
+    case 'l': arg >> opt::alphabet; break; 
     case '?': die = true; break;
     case 't': arg >> opt::num_threads; break;
     case 'm': arg >> opt::models_fofn; break;
@@ -386,6 +469,12 @@ void parse_call_methylation_options(int argc, char** argv)
     die = true;
   }
 
+  if(opt::meth_motif.empty()) {
+    std::cerr << SUBPROGRAM ": a --seq string must be provided\n";
+    die = true;
+  }
+  
+  
   if(!opt::models_fofn.empty()) {
     // initialize the model set from the fofn
     PoreModelSet::initialize(opt::models_fofn);
