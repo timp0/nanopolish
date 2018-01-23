@@ -514,13 +514,21 @@ struct ModTAlphabet : public Alphabet
 
 
 // Global alphabet objects that can be re-used
+// Bunch more added by yfan 1/18/18
 extern DNAAlphabet gDNAAlphabet;
 extern MethylCpGAlphabet gMCpGAlphabet;
 extern MethylDamAlphabet gMethylDamAlphabet;
 extern MethylDcmAlphabet gMethylDcmAlphabet;
 extern ModTAlphabet gModTAlphabet;
+extern MethylSin395Alphabet gMethylSin395Alphabet;
+extern Methylfnu4hAlphabet gMethylfnu4hAlphabet;
+extern MethylsdeaIIAlphabet gMethylsdeaIIAlphabet;
+extern MethylhinfIAlphabet gMethylhinfIAlphabet;
+extern MethylpspjdriAlphabet gMethylpspjdriAlphabet;
+extern UtoTRNAAlphabet gUtoTRNAAlphabet;
 
 const Alphabet* best_alphabet(const char *bases);
 const Alphabet* get_alphabet_by_name(const std::string& name);
 
 #endif
+

@@ -75,6 +75,23 @@ struct ScoredSite
 };
 
 
+
+//
+// yfan edit 1/18/18 - add more alphabets
+//
+Alphabet* mtest_alphabet = &gMCpGAlphabet;
+Alphabet* damtest_alphabet = &gMethylDamAlphabet;
+Alphabet* dcmtest_alphabet = &gMethylDcmAlphabet;
+Alphabet* sintest_alphabet = &gMethylSin395Alphabet;
+Alphabet* fnutest_alphabet = &gMethylfnu4hAlphabet;
+Alphabet* sdeatest_alphabet = &gMethylsdeaIIAlphabet;
+Alphabet* hinftest_alphabet = &gMethylhinfIAlphabet;
+Alphabet* pspjdritest_alphabet = &gMethylpspjdriAlphabet;
+Alphabet* ModTtest_alphabet = &gModTAlphabet;
+Alphabet* UtoTRNAtest_alphabet = &gUtoTRNAAlphabet;
+
+
+
 //
 // Getopt
 //n
@@ -136,7 +153,7 @@ static const struct option longopts[] = {
   { "help",             no_argument,       NULL, OPT_HELP },
   { "version",          no_argument,       NULL, OPT_VERSION },
   { NULL, 0, NULL, 0 }
-};
+n};
 
 // Test CpG sites in this read for methylation
 void calculate_methylation_for_read(const OutputHandles& handles,
@@ -203,41 +220,6 @@ void calculate_methylation_for_read(const OutputHandles& handles,
     ref_seq = gDNAAlphabet.disambiguate(ref_seq);
 
     
-    //
-    // yfan edit 1/18/18 - option for different alphabets
-    //
-    if(opt::alphabet == "CpG"){
-      Alphabet* mtest_alphabet = &gMCpGAlphabet;
-    }
-    if(opt::alphabet == "Dam"){
-      Alphabet* mtest_alphabet = &gMethylDamAlphabet;
-    }
-    if(opt::alphabet == "Dcm"){
-      Alphabet* mtest_alphabet = &gMethylDcmAlphabet;
-    }
-    if(opt::alphabet == "Sin395"){
-      Alphabet* mtest_alphabet = &gMethylSin395Alphabet;
-    }
-    if(opt::alphabet == "fnu4h"){
-      Alphabet* mtest_alphabet = &gMethylfnu4hAlphabet;
-    }
-    if(opt::alphabet == "sdeaII"){
-      Alphabet* mtest_alphabet = &gMethylhinfIAlphabet;
-    }
-    if(opt::alphabet == "hinfI"){
-      Alphabet* mtest_alphabet = &gMethylhinfIAlphabet;
-    }
-    if(opt::alphabet == "pspjdri"){
-      Alphabet* mtest_alphabet = &gMethylpspjdriAlphabet;
-    }
-    if(opt::alphabet == "ModT"){
-      Alphabet* mtest_alphabet = &gModTAlphabet;
-    }
-    if(opt::alphabet == "UtoTRNA"){
-      Alphabet* mtest_alphabet = &gUtoTRNAAlphabet;
-    }
-
-
 
     // Scan the sequence for CpGs
     // Timp edit 11/30/17 - change to 4mC motif detection - CCGG
@@ -322,6 +304,40 @@ void calculate_methylation_for_read(const OutputHandles& handles,
 	continue;
       }
 
+
+      
+      //
+      // yfan edit 1/18/18 - add other alphabets
+      //
+      if(opt::alphabet == "Dam"){
+	mtest_alphabet=damtest_alphabet
+      }
+      if(opt::alphabet == "Dcm"){
+	mtest_alphabet=dcmtest_alphabet
+      }
+      if(opt::alphabet == "Sin395"){
+	mtest_alphabet=sintest_alphabet
+      }
+      if(opt::alphabet == "fnu4h"){
+	mtest_alphabet=fnutest_alphabet
+      }
+      if(opt::alphabet == "sdeaII"){
+	mtest_alphabet=sdeatest_alphabet
+      }
+      if(opt::alphabet == "hinfI"){
+	mtest_alphabet=hinftest_alphabet
+      }
+      if(opt::alphabet == "pspjdri"){
+	mtest_alphabet=pspjdritest_alphabet
+      }
+      if(opt::alphabet == "ModT"){
+	mtest_alphabet=ModTtest_alphabet
+      }
+      if(opt::alphabet == "UtoTRNA"){
+	mtest_alphabet=UtoTRNAtest_alphabet
+      }
+
+      
       std::string subseq = ref_seq.substr(sub_start_pos, sub_end_pos - sub_start_pos + 1);
       std::string rc_subseq = mtest_alphabet->reverse_complement(subseq);
 
