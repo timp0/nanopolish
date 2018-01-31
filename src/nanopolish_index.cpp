@@ -37,6 +37,7 @@ static const char *INDEX_USAGE_MESSAGE =
 "\n"
 "      --help                           display this help and exit\n"
 "      --version                        display version\n"
+"  -t  --task                           set to 'db' to traverse file structure. Do this unless you're trying to run on grid\n"
 "  -v, --verbose                        display verbose output\n"
 "  -d, --directory                      path to the directory containing the raw ONT signal files. This option can be given multiple times.\n"
 "  -f, --fast5-fofn                     file containing the paths to each fast5 file for the run\n"
@@ -46,6 +47,7 @@ namespace opt
 {
     static unsigned int verbose = 0;
     static std::vector<std::string> raw_file_directories;
+    static std::string task;
     static std::string fast5_fofn;
     static std::string reads_file;
 }
@@ -105,7 +107,7 @@ void process_fast5_fofn(ReadDB& read_db, const std::string& fast5_fofn)
     }
 }
 
-static const char* shortopts = "vd:f:";
+static const char* shortopts = "vd:t:f:";
 
 enum {
     OPT_HELP = 1,
@@ -120,6 +122,7 @@ static const struct option longopts[] = {
     { "verbose",            no_argument,       NULL, 'v' },
     { "directory",          required_argument, NULL, 'd' },
     { "fast5-fofn",         required_argument, NULL, 'f' },
+    { "task",               required_argument, NULL, 't' },
     { NULL, 0, NULL, 0 }
 };
 
@@ -181,7 +184,7 @@ int index_main(int argc, char** argv)
 
     // if the input fastq did not contain a complete set of paths
     // use the fofn/directory provided to augment the index
-    if(!all_reads_have_paths) {
+    if(!all_reads_have_paths && opt::task=="db") {
 
         for(const auto& dir_name : opt::raw_file_directories) {
             index_path(read_db, dir_name);

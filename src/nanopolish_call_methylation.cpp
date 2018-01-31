@@ -153,7 +153,7 @@ static const struct option longopts[] = {
   { "help",             no_argument,       NULL, OPT_HELP },
   { "version",          no_argument,       NULL, OPT_VERSION },
   { NULL, 0, NULL, 0 }
-n};
+};
 
 // Test CpG sites in this read for methylation
 void calculate_methylation_for_read(const OutputHandles& handles,
@@ -310,31 +310,31 @@ void calculate_methylation_for_read(const OutputHandles& handles,
       // yfan edit 1/18/18 - add other alphabets
       //
       if(opt::alphabet == "Dam"){
-	mtest_alphabet=damtest_alphabet
+	mtest_alphabet=damtest_alphabet ;
       }
       if(opt::alphabet == "Dcm"){
-	mtest_alphabet=dcmtest_alphabet
+	mtest_alphabet=dcmtest_alphabet ;
       }
       if(opt::alphabet == "Sin395"){
-	mtest_alphabet=sintest_alphabet
+	mtest_alphabet=sintest_alphabet ;
       }
       if(opt::alphabet == "fnu4h"){
-	mtest_alphabet=fnutest_alphabet
+	mtest_alphabet=fnutest_alphabet ;
       }
       if(opt::alphabet == "sdeaII"){
-	mtest_alphabet=sdeatest_alphabet
+	mtest_alphabet=sdeatest_alphabet ;
       }
       if(opt::alphabet == "hinfI"){
-	mtest_alphabet=hinftest_alphabet
+	mtest_alphabet=hinftest_alphabet ;
       }
       if(opt::alphabet == "pspjdri"){
-	mtest_alphabet=pspjdritest_alphabet
+	mtest_alphabet=pspjdritest_alphabet ;
       }
       if(opt::alphabet == "ModT"){
-	mtest_alphabet=ModTtest_alphabet
+	mtest_alphabet=ModTtest_alphabet ;
       }
       if(opt::alphabet == "UtoTRNA"){
-	mtest_alphabet=UtoTRNAtest_alphabet
+	mtest_alphabet=UtoTRNAtest_alphabet ;
       }
 
       

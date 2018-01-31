@@ -524,11 +524,7 @@ extern MethylpspjdriAlphabet gMethylpspjdriAlphabet;
 extern Methylfnu4hAlphabet gMethylfnu4hAlphabet;
 extern MethylSin395Alphabet gMethylSin395Alphabet;
 extern ModTAlphabet gModTAlphabet;
-extern MethylSin395Alphabet gMethylSin395Alphabet;
-extern Methylfnu4hAlphabet gMethylfnu4hAlphabet;
 extern MethylsdeaIIAlphabet gMethylsdeaIIAlphabet;
-extern MethylhinfIAlphabet gMethylhinfIAlphabet;
-extern MethylpspjdriAlphabet gMethylpspjdriAlphabet;
 extern UtoTRNAAlphabet gUtoTRNAAlphabet;
 
 const Alphabet* best_alphabet(const char *bases);
