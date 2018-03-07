@@ -145,6 +145,7 @@ void parse_index_options(int argc, char** argv)
             case 'v': opt::verbose++; break;
             case 'd': opt::raw_file_directories.push_back(arg.str()); break;
             case 'f': arg >> opt::fast5_fofn; break;
+	    case 't': arg >> opt::task; break;
         }
     }
 
@@ -184,7 +185,7 @@ int index_main(int argc, char** argv)
 
     // if the input fastq did not contain a complete set of paths
     // use the fofn/directory provided to augment the index
-    if(!all_reads_have_paths && opt::task=="db") {
+    if(!all_reads_have_paths && !opt::task.empty()) {
 
         for(const auto& dir_name : opt::raw_file_directories) {
             index_path(read_db, dir_name);
