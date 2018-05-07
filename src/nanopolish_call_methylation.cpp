@@ -95,11 +95,12 @@ static const char *CALL_METHYLATION_USAGE_MESSAGE =
 "  -v, --verbose                        display verbose output\n"
 "      --version                        display version\n"
 "      --help                           display this help and exit\n"
-"  -r, --reads=FILE                     the 2D ONT reads are in fasta FILE\n"
+"  -r, --reads=FILE                     the ONT reads are in fasta FILE\n"
 "  -b, --bam=FILE                       the reads aligned to the genome assembly are in bam FILE\n"
 "  -g, --genome=FILE                    the genome we are computing a consensus for is in FILE\n"
 "  -t, --threads=NUM                    use NUM threads (default: 1)\n"
 "      --progress                       print out a progress message\n"
+"  -K  --batchsize=NUM                  the batch size (default: 512)\n"
 "\nReport bugs to " PACKAGE_BUGREPORT "\n\n";
 
 namespace opt
@@ -113,12 +114,14 @@ namespace opt
     static std::string cpg_methylation_model_type = "reftrained";
     static int progress = 0;
     static int num_threads = 1;
-    static int batch_size = 128;
+    static int batch_size = 512;
+    static int min_separation = 10;
+    static int min_flank = 10;
 }
 
-static const char* shortopts = "r:b:g:t:w:m:vn";
+static const char* shortopts = "r:b:g:t:w:m:K:vn";
 
-enum { OPT_HELP = 1, OPT_VERSION, OPT_PROGRESS };
+enum { OPT_HELP = 1, OPT_VERSION, OPT_PROGRESS, OPT_MIN_SEPARATION };
 
 static const struct option longopts[] = {
     { "verbose",          no_argument,       NULL, 'v' },
@@ -128,9 +131,11 @@ static const struct option longopts[] = {
     { "window",           required_argument, NULL, 'w' },
     { "threads",          required_argument, NULL, 't' },
     { "models-fofn",      required_argument, NULL, 'm' },
+    { "min-separation",   required_argument, NULL, OPT_MIN_SEPARATION },
     { "progress",         no_argument,       NULL, OPT_PROGRESS },
     { "help",             no_argument,       NULL, OPT_HELP },
     { "version",          no_argument,       NULL, OPT_VERSION },
+    { "batchsize",        no_argument,       NULL, 'K' },
     { NULL, 0, NULL, 0 }
 };
 
@@ -184,9 +189,9 @@ void calculate_methylation_for_read(const OutputHandles& handles,
         // Extract the reference sequence for this region
         int fetched_len = 0;
         assert(ref_end_pos >= ref_start_pos);
-        std::string ref_seq = get_reference_region_ts(fai, contig.c_str(), ref_start_pos, 
+        std::string ref_seq = get_reference_region_ts(fai, contig.c_str(), ref_start_pos,
                                                       ref_end_pos, &fetched_len);
-        
+
         // Remove non-ACGT bases from this reference segment
         ref_seq = gDNAAlphabet.disambiguate(ref_seq);
 
@@ -202,17 +207,16 @@ void calculate_methylation_for_read(const OutputHandles& handles,
         }
 
         // Batch the CpGs together into groups that are separated by some minimum distance
-        int min_separation = 10;
         std::vector<std::pair<int, int>> groups;
-        
+
         size_t curr_idx = 0;
         while(curr_idx < cpg_sites.size()) {
             // Find the endpoint of this group of sites
             size_t end_idx = curr_idx + 1;
             while(end_idx < cpg_sites.size()) {
-                if(cpg_sites[end_idx] - cpg_sites[end_idx - 1] > min_separation)
+                if(cpg_sites[end_idx] - cpg_sites[end_idx - 1] > opt::min_separation)
                     break;
-                end_idx += 1; 
+                end_idx += 1;
             }
             groups.push_back(std::make_pair(curr_idx, end_idx));
             curr_idx = end_idx;
@@ -224,13 +228,13 @@ void calculate_methylation_for_read(const OutputHandles& handles,
             size_t end_idx = groups[group_idx].second;
 
             // the coordinates on the reference substring for this group of sites
-            int sub_start_pos = cpg_sites[start_idx] - min_separation;
-            int sub_end_pos = cpg_sites[end_idx - 1] + min_separation;
+            int sub_start_pos = cpg_sites[start_idx] - opt::min_flank;
+            int sub_end_pos = cpg_sites[end_idx - 1] + opt::min_flank;
             int span = cpg_sites[end_idx - 1] - cpg_sites[start_idx];
 
             // skip if too close to the start of the read alignment or
             // if the reference range is too large to efficiently call
-            if(sub_start_pos <= min_separation || span > 200) {
+            if(sub_start_pos <= opt::min_separation || span > 200) {
                 continue;
             }
 
@@ -242,14 +246,14 @@ void calculate_methylation_for_read(const OutputHandles& handles,
 
             // using the reference-to-event map, look up the event indices for this segment
             int e1,e2;
-            bool bounded = AlignmentDB::_find_by_ref_bounds(event_align_record.aligned_events, 
+            bool bounded = AlignmentDB::_find_by_ref_bounds(event_align_record.aligned_events,
                                                             calling_start,
                                                             calling_end,
-                                                            e1, 
+                                                            e1,
                                                             e2);
 
-            double ratio = fabs(e2 - e1) / (calling_start - calling_end); 
-            
+            double ratio = fabs(e2 - e1) / (calling_start - calling_end);
+
             // Only process this region if the the read is aligned within the boundaries
             // and the span between the start/end is not unusually short
             if(!bounded || abs(e2 - e1) <= 10 || ratio > MAX_EVENT_TO_BP_RATIO) {
@@ -267,7 +271,7 @@ void calculate_methylation_for_read(const OutputHandles& handles,
             data.event_start_idx = e1;
             data.event_stop_idx = e2;
             data.event_stride = data.event_start_idx <= data.event_stop_idx ? 1 : -1;
-         
+
             // Calculate the likelihood of the unmethylated sequence
             HMMInputSequence unmethylated(subseq, rc_subseq, mtest_alphabet);
             double unmethylated_score = profile_hmm_score(unmethylated, data, hmm_flags);
@@ -275,7 +279,7 @@ void calculate_methylation_for_read(const OutputHandles& handles,
             // Methylate all CpGs in the sequence and score again
             std::string mcpg_subseq = mtest_alphabet->methylate(subseq);
             std::string rc_mcpg_subseq = mtest_alphabet->reverse_complement(mcpg_subseq);
-            
+
             // Calculate the likelihood of the methylated sequence
             HMMInputSequence methylated(mcpg_subseq, rc_mcpg_subseq, mtest_alphabet);
             double methylated_score = profile_hmm_score(methylated, data, hmm_flags);
@@ -295,11 +299,11 @@ void calculate_methylation_for_read(const OutputHandles& handles,
                 size_t site_output_start = cpg_sites[start_idx] - k + 1;
                 size_t site_output_end =  cpg_sites[end_idx - 1] + k;
                 ss.sequence = ref_seq.substr(site_output_start, site_output_end - site_output_start);
-            
-                // insert into the map    
+
+                // insert into the map
                 iter = site_score_map.insert(std::make_pair(start_position, ss)).first;
             }
-            
+
             // set strand-specific score
             // upon output below the strand scores will be summed
             iter->second.ll_unmethylated[strand_idx] = unmethylated_score;
@@ -307,7 +311,7 @@ void calculate_methylation_for_read(const OutputHandles& handles,
             iter->second.strands_scored += 1;
         } // for group
     } // for strands
-    
+
     #pragma omp critical(call_methylation_write)
     {
         // write all sites for this read
@@ -340,6 +344,8 @@ void parse_call_methylation_options(int argc, char** argv)
             case 'm': arg >> opt::models_fofn; break;
             case 'w': arg >> opt::region; break;
             case 'v': opt::verbose++; break;
+            case 'K': arg >> opt::batch_size; break;
+            case OPT_MIN_SEPARATION: arg >> opt::min_separation; break;
             case OPT_PROGRESS: opt::progress = true; break;
             case OPT_HELP:
                 std::cout << CALL_METHYLATION_USAGE_MESSAGE;
@@ -421,7 +427,7 @@ int call_methylation_main(int argc, char** argv)
     // bam record, read index, etc passed as parameters
     // bind the other parameters the worker function needs here
     auto f = std::bind(calculate_methylation_for_read, std::ref(handles), std::ref(read_db), fai, _1, _2, _3, _4, _5);
-    BamProcessor processor(opt::bam_file, opt::region, opt::num_threads);
+    BamProcessor processor(opt::bam_file, opt::region, opt::num_threads, opt::batch_size);
     processor.parallel_run(f);
 
     // cleanup
